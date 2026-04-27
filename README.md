@@ -82,3 +82,66 @@ The sheet must be shared so the deployed app can view it. Add new agents to Shee
 - Export PDF now forces one final form sync and text fit before generating the PDF.
 - FICA / Compliance page text colour has been changed to Blue Lily blue instead of black.
 - FICA / Compliance text fitting has been tightened to fit the allocated PDF area better.
+
+
+## v9 - Optional Property Report / CMA PDF Import
+
+This version adds an optional PDF importer at the top of the form.
+
+Supported import layouts:
+- LOOM Comparative Market Analysis reports
+- TVA Property Report PDFs
+
+How it works:
+1. Upload a supported PDF in the "Optional Property Report / CMA Import" section.
+2. The app reads the PDF in the browser.
+3. It pre-populates the available fields, including owner, address, property size, purchase information, property type, market area and recent comparable sales.
+4. All imported fields remain editable.
+5. The upload is optional. The app can still be completed fully manually without a property report.
+
+Notes:
+- The app loads up to 8 comparable sale rows into the calculator to match the current CMA calculator layout.
+- Agent website remains locked to bluelilysa.co.za.
+- Prepared By details still come from the Google Sheet agent backend when a matching agent is selected.
+
+
+## v10 update
+- Strengthened the cover-page address auto-fit for imported LOOM and TVA reports.
+- Address text now shrinks further and line-height tightens before export/print, so long imported addresses fit inside the allocated cover-page area.
+
+
+## Branding update
+- Header now shows the Blue Lily logo next to the app name.
+- Favicon, Apple touch icon, and Android app icons are included.
+- `manifest.json` is included so installed/PWA shortcuts use the Blue Lily icon across supported devices.
+
+
+## Clean-start update
+- The app no longer restores previous form data, imported reports or uploaded images on reload.
+- Every new page load starts blank and clean.
+- The agent list still refreshes from the Google Sheet backend.
+- To keep work intentionally, use Download backup and Import backup.
+
+
+## v15 update
+- LOOM owner import now keeps only the owner name text.
+- ID numbers, marital status, spouse/status wording and ownership percentages are removed before the owner field is populated.
+- The app still starts clean on every fresh load.
+
+
+## v16 owner import fix
+- LOOM owner import now strips ID numbers and marital/status wording before populating the owner field.
+- Example: `BARNARD CHRISTINA HELENA 6004060089089 MARRIED OUT` becomes `BARNARD CHRISTINA HELENA`.
+
+
+## v17 LOOM sectional size import
+- LOOM `Deeds Extent` now imports into `Under Roof` as floor size.
+- For LOOM sectional-title imports, `Surveyor General Extent` is not used as Erf Size because it is normally the scheme / parent extent.
+- If no real land size is provided, Erf Size stays blank.
+
+
+## v18 behaviour update
+- The app opens clean on every page load.
+- Uploading a new LOOM/TVA property report resets the whole app first, then imports the new PDF data.
+- Market statistics, price per m², API and recommended price calculations stay blank until a recognised property report PDF has been imported.
+- Manual entry is still available for client, property, agent, FICA/compliance and PDF export fields.
