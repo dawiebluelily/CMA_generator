@@ -145,3 +145,9 @@ Notes:
 - Uploading a new LOOM/TVA property report resets the whole app first, then imports the new PDF data.
 - Market statistics, price per m², API and recommended price calculations stay blank until a recognised property report PDF has been imported.
 - Manual entry is still available for client, property, agent, FICA/compliance and PDF export fields.
+
+## v20 update
+- LOOM freehold/full-title imports now use `FREEHOLD` as the property type.
+- If a LOOM report only provides an erf/land extent for a freehold property, it imports to `Erf Size` and leaves `Under Roof` blank.
+- LOOM sectional-title imports still use `Deeds Extent` as the floor/under-roof size and keep `Erf Size` blank unless manually added.
+- LOOM address import is more flexible and stops before the Details/property-data section even when the report layout changes.

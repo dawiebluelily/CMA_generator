@@ -1,4 +1,4 @@
-const STORAGE_KEY = "blue-lily-cma-builder-v18";
+const STORAGE_KEY = "blue-lily-cma-builder-v20";
 const AUTO_SAVE_ENABLED = false;
 const AGENT_SHEET_ID = "1OcpmU2rveF1s633NCvCy9BsZN--44lKocjqYSAx5wAY";
 const AGENT_SHEET_NAME = "Sheet1";
@@ -8,6 +8,7 @@ const PDFJS_WORKER_SRC = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174
 
 const PROPERTY_TYPES = [
   "SECTIONAL",
+  "FREEHOLD",
   "RESIDENTIAL",
   "COMMERCIAL",
   "AGRICULTURAL",
@@ -716,6 +717,51 @@ function clearSectionalPlotSizes(rows, propertyType){
   return (rows || []).map(row => ({ ...row, plotSize: "" }));
 }
 
+function extractLoomAddress(lines){
+  const start = findLineIndex(lines, "Address");
+  if(start < 0) return "";
+
+  const stopLabels = [
+    "details", "property description", "property type", "property key", "erf number",
+    "unit number", "portion number", "lat long", "deeds extent", "surveyor general extent",
+    "mapcode", "municipal valuation", "valuation date", "powered by", "deeds overview",
+    "ownership", "bond information", "transfer history"
+  ];
+
+  const parts = [];
+  const firstLine = lines[start] || "";
+  const sameLine = firstLine.replace(/^\s*Address\s*[:\-]?\s*/i, "").trim();
+  if(sameLine && normalizeReportLabel(sameLine) !== "address") parts.push(sameLine);
+
+  for(let i = start + 1; i < Math.min(lines.length, start + 12); i += 1){
+    const line = String(lines[i] || "").trim();
+    if(!line || /^[-–]+$/.test(line)) continue;
+
+    const norm = normalizeReportLabel(line);
+    if(stopLabels.some(stop => norm === stop || norm.startsWith(stop + " ") || norm.includes(" " + stop + " "))) break;
+    if(isKnownReportLabel(line)) break;
+    if(/^(Property Details|Property Overview|Comparative Market Analysis|LOOM)$/i.test(line)) continue;
+    if(/^-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?$/.test(line.replace(/\s+/g, ""))) continue;
+
+    parts.push(line);
+  }
+
+  return uniqueAddressParts(parts).join(", ");
+}
+
+function uniqueAddressParts(parts){
+  const seen = new Set();
+  return (parts || [])
+    .map(part => String(part || "").replace(/\s+/g, " ").replace(/^[,\s]+|[,\s]+$/g, "").trim())
+    .filter(part => part && part !== "-")
+    .filter(part => {
+      const key = normalizeReportLabel(part);
+      if(seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
 function parseLoomReport(text){
   const lines = reportLines(text);
   const data = {};
@@ -724,8 +770,8 @@ function parseLoomReport(text){
   const preparedBy = lineAfter(lines, "Comparative Market Analysis for:");
   if(preparedBy) data.preparedBy = preparedBy;
 
-  const addressLines = collectLinesBetween(lines, "Address", ["Details"]);
-  if(addressLines.length) data.address = addressLines.join(", ");
+  const loomAddress = extractLoomAddress(lines);
+  if(loomAddress) data.address = loomAddress;
 
   const ownerLines = collectLinesBetween(lines, "Current Owner", ["100%", "Bond Information"]);
   if(ownerLines.length) data.owner = cleanLoomOwnerName(ownerLines);
@@ -738,19 +784,22 @@ function parseLoomReport(text){
 
   const deedsExtent = valueAfterLabel(lines, "Deeds Extent");
   const sgExtent = valueAfterLabel(lines, "Surveyor General Extent");
-  const erfNumber = valueAfterLabel(lines, "Erf Number");
   const isSectionalLoom = normalizePropertyType(data.propertyType || "") === "SECTIONAL";
 
-  // LOOM reports show "Deeds Extent" as the unit / floor size for sectional properties.
-  // "Surveyor General Extent" is often the scheme / parent erf extent, not the seller's land size.
-  // Therefore: for LOOM sectional title imports, use Deeds Extent for Under Roof and keep Erf Size blank.
-  if(deedsExtent) data.underRoof = integerFromText(deedsExtent);
+  // LOOM size rule:
+  // Sectional Title: Deeds Extent = unit/floor size, so it goes to Under Roof and Erf Size stays blank.
+  // Freehold / full title / vacant land: the single extent shown by LOOM is land/erf size, not floor size.
   if(isSectionalLoom){
+    if(deedsExtent) data.underRoof = integerFromText(deedsExtent);
     data.erfSize = "";
-  }else if(sgExtent){
-    data.erfSize = integerFromText(sgExtent);
-  }else if(erfNumber){
-    data.erfSize = integerFromText(erfNumber);
+  }else{
+    const landSize = integerFromText(deedsExtent) || integerFromText(sgExtent);
+    if(landSize){
+      data.erfSize = landSize;
+      data.underRoof = "";
+      if(!data.propertyType || normalizePropertyType(data.propertyType) === "RESIDENTIAL") data.propertyType = "FREEHOLD";
+      if(!data.ownershipType || data.ownershipType === "Full Title") data.ownershipType = "Full Title";
+    }
   }
 
   const deedsTown = valueAfterLabel(lines, "Deeds Town");
@@ -1167,6 +1216,7 @@ function dateToIso(value){
 function ownershipFromPropertyType(value){
   const clean = normalizePropertyType(value);
   if(clean === "SECTIONAL") return "Sectional Title";
+  if(clean === "FREEHOLD") return "Full Title";
   if(clean === "VACANT LAND") return "Vacant Land";
   if(clean === "AGRICULTURAL") return "Farm / Agricultural Holding";
   return "Full Title";
@@ -1655,8 +1705,10 @@ function normalizePropertyType(value){
     "SECTIONAL": "SECTIONAL",
     "SECTIONAL TITLE": "SECTIONAL",
     "RESIDENTIAL": "RESIDENTIAL",
-    "FREEHOLD": "RESIDENTIAL",
-    "FULL TITLE": "RESIDENTIAL",
+    "FREEHOLD": "FREEHOLD",
+    "FREE HOLD": "FREEHOLD",
+    "FULL TITLE": "FREEHOLD",
+    "FULLTITLE": "FREEHOLD",
     "COMMERCIAL": "COMMERCIAL",
     "FARM": "AGRICULTURAL",
     "AGRICULTURAL": "AGRICULTURAL",
