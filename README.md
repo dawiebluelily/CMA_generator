@@ -75,3 +75,10 @@ Current sheet ID wired into app.js:
 1OcpmU2rveF1s633NCvCy9BsZN--44lKocjqYSAx5wAY
 
 The sheet must be shared so the deployed app can view it. Add new agents to Sheet1 under the existing columns and they will appear in the Prepared By dropdown after refresh.
+
+## Version 8 updates
+- Fixed FICA / Compliance live syncing so dropdown changes are pulled into the PDF preview before export.
+- Seller FICA and Compliance Certificates output now refreshes from the current form values every time the PDF preview renders.
+- Export PDF now forces one final form sync and text fit before generating the PDF.
+- FICA / Compliance page text colour has been changed to Blue Lily blue instead of black.
+- FICA / Compliance text fitting has been tightened to fit the allocated PDF area better.

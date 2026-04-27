@@ -38,3 +38,36 @@ input[readonly]{background:#eef6ff;color:var(--deep);font-weight:900;cursor:not-
 .active-collage .img5,.offer-collage .img5{left:508px;top:302px;width:160px;height:190px}
 .active-collage .img6,.offer-collage .img6{display:none}
 .backend-status{font-size:12px;line-height:1.35;color:var(--muted);background:#f5faff;border:1px solid var(--line);border-radius:10px;padding:9px 10px;text-transform:none;font-weight:700;letter-spacing:0}
+
+
+/* v8: FICA/compliance PDF output fixes */
+.fica-output,
+.fica-output h2,
+.fica-output li{
+  color:var(--blue);
+}
+.fica-output{
+  bottom:94px;
+  overflow:hidden;
+  line-height:1.17;
+  font-weight:500;
+}
+.fica-output h2{
+  font-size:1.12em;
+  margin:0 0 .18em;
+  font-weight:800;
+}
+.fica-output ul{
+  margin:0 0 .62em 0;
+  padding-left:0;
+  list-style-position:inside;
+}
+.fica-output li{
+  margin:0 0 .08em;
+}
+.fica-section{
+  break-inside:avoid;
+}
+@media print{
+  .fica-output, .fica-output h2, .fica-output li{color:#0057ad!important}
+}

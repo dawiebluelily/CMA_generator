@@ -1,4 +1,4 @@
-const STORAGE_KEY = "blue-lily-cma-builder-v7";
+const STORAGE_KEY = "blue-lily-cma-builder-v8";
 const AGENT_SHEET_ID = "1OcpmU2rveF1s633NCvCy9BsZN--44lKocjqYSAx5wAY";
 const AGENT_SHEET_NAME = "Sheet1";
 const AGENT_REFRESH_MS = 5 * 60 * 1000;
@@ -580,8 +580,23 @@ function syncForm(){
   renderComparableInputs();
 }
 
-function render(){
+function syncStateFromForm(){
+  document.querySelectorAll("[data-field]").forEach(input => {
+    const field = input.dataset.field;
+    if(field === "preparedBy"){
+      const hasLoadedAgentOptions = Array.from(input.options || []).some(option => option.value && option.value !== "Loading agents...");
+      if(!hasLoadedAgentOptions && state.preparedBy) return;
+    }
+    state[field] = input.value;
+  });
+  if(state.preparedBy && agents.length) applyAgentByName(state.preparedBy);
   lockWebsite();
+  state.propertyType = normalizePropertyType(state.propertyType);
+  ensureRows();
+}
+
+function render(){
+  syncStateFromForm();
   const view = computedView();
   document.querySelectorAll("[data-out]").forEach(el => {
     const field = el.dataset.out;
@@ -809,7 +824,7 @@ function lockWebsite(){
 
 function applyDynamicFitting(){
   fitElement(document.querySelector('[data-fit="address"]'), 28, 14);
-  fitElement(document.querySelector('[data-fit="fica"]'), 13.7, 8.4);
+  fitElement(document.querySelector('[data-fit="fica"]'), 13.2, 6.8);
 }
 
 function fitElement(el, startSize, minSize){
@@ -826,25 +841,43 @@ function fitElement(el, startSize, minSize){
 }
 
 function renderFica(){
+  syncStateFromForm();
   const sections = [];
+
+  const addSection = section => {
+    if(!section || !section.heading) return;
+    sections.push(section);
+  };
+
   [state.fica1, state.fica2].forEach(key => {
-    if(key && FICA[key]) sections.push(FICA[key]);
+    if(key && FICA[key]) addSection(FICA[key]);
   });
-  if(state.ownershipType && OWNERSHIP[state.ownershipType]) sections.push(OWNERSHIP[state.ownershipType]);
-  sections.push(COMPLIANCE.electrical);
-  if(state.solar === "Yes") sections.push(COMPLIANCE.solar);
-  if(state.electricFence === "Yes") sections.push(COMPLIANCE.electricFence);
-  if(state.gas === "Yes") sections.push(COMPLIANCE.gas);
-  const needsBugs = state.bugs === "Yes" || (state.bugs === "Auto" && ["Western Cape", "KwaZulu-Natal"].includes(state.province));
-  if(needsBugs) sections.push(COMPLIANCE.bugs);
-  if(state.water === "Yes") sections.push(COMPLIANCE.water);
-  if(state.standardDocs === "Yes") sections.push(STANDARD_DOCS);
-  document.getElementById("ficaOutput").innerHTML = sections.map(section => `
+
+  if(state.ownershipType && OWNERSHIP[state.ownershipType]) addSection(OWNERSHIP[state.ownershipType]);
+
+  addSection(COMPLIANCE.electrical);
+  if(state.solar === "Yes") addSection(COMPLIANCE.solar);
+  if(state.electricFence === "Yes") addSection(COMPLIANCE.electricFence);
+  if(state.gas === "Yes") addSection(COMPLIANCE.gas);
+
+  const province = String(state.province || "").trim();
+  const needsBugs = state.bugs === "Yes" || (state.bugs === "Auto" && ["Western Cape", "KwaZulu-Natal"].includes(province));
+  if(needsBugs) addSection(COMPLIANCE.bugs);
+
+  const needsWater = state.water === "Yes" || (state.water === "Auto" && province === "Western Cape");
+  if(needsWater) addSection(COMPLIANCE.water);
+
+  if(state.standardDocs === "Yes") addSection(STANDARD_DOCS);
+
+  const target = document.getElementById("ficaOutput");
+  if(!target) return;
+  target.innerHTML = sections.map(section => `
     <div class="fica-section">
       <h2>${escapeHtml(section.heading)}</h2>
       <ul>${section.bullets.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
     </div>
   `).join("");
+  target.dataset.sectionCount = String(sections.length);
 }
 
 function saveState(){
@@ -893,7 +926,13 @@ function importBackup(event){
   reader.readAsText(file);
 }
 
-function exportPdf(){
+async function exportPdf(){
+  syncStateFromForm();
+  render();
+  applyDynamicFitting();
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  applyDynamicFitting();
+
   const report = document.getElementById("pdfReport");
   if(typeof html2pdf === "undefined"){
     window.print();
