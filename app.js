@@ -1665,86 +1665,20 @@ async function exportPdf(){
   await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   applyDynamicFitting();
 
-  const pages = Array.from(document.querySelectorAll("#pdfReport .pdf-page"));
-  const jsPDFClass = window.jspdf && window.jspdf.jsPDF ? window.jspdf.jsPDF : window.jsPDF;
-
-  if(!pages.length || typeof html2canvas === "undefined" || !jsPDFClass){
+  const report = document.getElementById("pdfReport");
+  if(typeof html2pdf === "undefined"){
     window.print();
     return;
   }
-
   const fileName = `${safeName(state.owner || "Blue-Lily-CMA")}.pdf`;
-  const pdf = new jsPDFClass({
-    unit: "px",
-    format: [768, 1024],
-    orientation: "portrait",
-    compress: true
-  });
-
-  const exportHost = document.createElement("div");
-  exportHost.setAttribute("aria-hidden", "true");
-  exportHost.style.position = "fixed";
-  exportHost.style.left = "-10000px";
-  exportHost.style.top = "0";
-  exportHost.style.width = "768px";
-  exportHost.style.height = "1024px";
-  exportHost.style.overflow = "hidden";
-  exportHost.style.background = "#ffffff";
-  exportHost.style.zIndex = "-1";
-  document.body.appendChild(exportHost);
-
-  try{
-    for(let i = 0; i < pages.length; i += 1){
-      const clone = pages[i].cloneNode(true);
-      clone.style.width = "768px";
-      clone.style.height = "1024px";
-      clone.style.margin = "0";
-      clone.style.padding = "0";
-      clone.style.position = "relative";
-      clone.style.overflow = "hidden";
-      clone.style.boxShadow = "none";
-      clone.style.transform = "none";
-      clone.style.pageBreakAfter = "auto";
-      clone.style.breakAfter = "auto";
-      clone.style.background = "#ffffff";
-
-      exportHost.replaceChildren(clone);
-      await waitForImages(clone);
-      await new Promise(resolve => requestAnimationFrame(resolve));
-
-      const canvas = await html2canvas(clone, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: "#ffffff",
-        width: 768,
-        height: 1024,
-        windowWidth: 768,
-        windowHeight: 1024,
-        scrollX: 0,
-        scrollY: 0
-      });
-
-      const imgData = canvas.toDataURL("image/jpeg", 0.98);
-      if(i > 0) pdf.addPage([768, 1024], "portrait");
-      pdf.addImage(imgData, "JPEG", 0, 0, 768, 1024);
-    }
-    pdf.save(fileName);
-  }finally{
-    exportHost.remove();
-  }
-}
-
-function waitForImages(root){
-  const images = Array.from(root.querySelectorAll("img"));
-  if(!images.length) return Promise.resolve();
-  return Promise.all(images.map(img => {
-    if(img.complete) return Promise.resolve();
-    return new Promise(resolve => {
-      img.onload = resolve;
-      img.onerror = resolve;
-    });
-  }));
+  html2pdf().set({
+    margin: 0,
+    filename: fileName,
+    image: { type: "jpeg", quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff", scrollX: 0, scrollY: 0 },
+    jsPDF: { unit: "px", format: [768, 1024], orientation: "portrait", compress: true },
+    pagebreak: { mode: ["css", "legacy"], after: ".pdf-page" }
+  }).from(report).save();
 }
 
 function average(values){
