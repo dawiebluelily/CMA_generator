@@ -57,3 +57,21 @@ The app follows the same logic as Sheet 1:
 
 Upload the full folder to Netlify, GitHub Pages or any static hosting provider.
 Open `index.html` locally to test.
+
+## Version 6 updates
+- Website output is locked to bluelilysa.co.za for all agents.
+- Address and Seller FICA / Compliance output auto-shrinks to fit the PDF template area.
+- Competition image pages now allow up to 5 images per page section and preserve image aspect ratio without cropping/stretching.
+
+## Version 7 updates
+- Prepared By is now loaded dynamically from the Google Sheet backend.
+- The app expects the Google Sheet to have these headers in row 1: Name, Number, Email, FFC.
+- When an agent name is selected, Number, Email and FFC auto-populate from the same row.
+- The app refreshes the agent list on page load, when the browser window regains focus, and every 5 minutes while open.
+- Website remains locked to bluelilysa.co.za for all agents.
+
+## Google Sheet backend
+Current sheet ID wired into app.js:
+1OcpmU2rveF1s633NCvCy9BsZN--44lKocjqYSAx5wAY
+
+The sheet must be shared so the deployed app can view it. Add new agents to Sheet1 under the existing columns and they will appear in the Prepared By dropdown after refresh.

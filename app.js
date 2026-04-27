@@ -1,4 +1,8 @@
-const STORAGE_KEY = "blue-lily-cma-builder-v5";
+const STORAGE_KEY = "blue-lily-cma-builder-v7";
+const AGENT_SHEET_ID = "1OcpmU2rveF1s633NCvCy9BsZN--44lKocjqYSAx5wAY";
+const AGENT_SHEET_NAME = "Sheet1";
+const AGENT_REFRESH_MS = 5 * 60 * 1000;
+const AGENT_WEBSITE = "bluelilysa.co.za";
 
 const PROPERTY_TYPES = [
   "SECTIONAL",
@@ -258,7 +262,7 @@ const defaultData = {
   agentFfc: "",
   agentPhone: "",
   agentEmail: "",
-  agentWebsite: "",
+  agentWebsite: AGENT_WEBSITE,
   erfSize: "",
   underRoof: "",
   purchasePrice: "",
@@ -305,7 +309,7 @@ const sampleData = {
   agentFfc: "1229447",
   agentPhone: "+271234567890",
   agentEmail: "dawie@bluelilysa.co.za",
-  agentWebsite: "bluelilysa.co.za",
+  agentWebsite: AGENT_WEBSITE,
   erfSize: "1000",
   underRoof: "400",
   purchasePrice: "1750000",
@@ -355,6 +359,8 @@ const sampleData = {
 };
 
 let state = makeCleanState();
+let agents = [];
+let agentRefreshTimer = null;
 
 function populateSelects(){
   document.querySelectorAll(".property-type-select").forEach(select => {
@@ -368,22 +374,169 @@ function populateSelects(){
   });
 }
 
+function populateAgentSelect(){
+  document.querySelectorAll(".agent-select").forEach(select => {
+    const current = state.preparedBy || select.value || "";
+    const uniqueAgents = dedupeAgents(agents);
+    const options = uniqueAgents.length
+      ? [`<option value="">Select agent</option>`, ...uniqueAgents.map(agent => `<option value="${escapeHtml(agent.name)}">${escapeHtml(agent.name)}</option>`)]
+      : [`<option value="">No agents loaded</option>`];
+    select.innerHTML = options.join("");
+    select.value = uniqueAgents.some(agent => normalize(agent.name) === normalize(current)) ? current : "";
+  });
+}
+
+async function loadAgentsFromSheet(options = {}){
+  const status = document.getElementById("agentSheetStatus");
+  const silent = Boolean(options.silent);
+  const csvUrl = `https://docs.google.com/spreadsheets/d/${AGENT_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(AGENT_SHEET_NAME)}&cacheBust=${Date.now()}`;
+  if(status && !silent) status.textContent = "Loading agents from Google Sheet...";
+  try{
+    const response = await fetch(csvUrl, { cache: "no-store" });
+    if(!response.ok) throw new Error(`Google Sheet returned ${response.status}`);
+    const csvText = await response.text();
+    const loadedAgents = parseAgentCsv(csvText);
+    if(!loadedAgents.length) throw new Error("No agent records found. Check that row 1 has Name, Number, Email and FFC.");
+    agents = loadedAgents;
+    localStorage.setItem("blue-lily-agent-cache", JSON.stringify(agents));
+    populateAgentSelect();
+    updateSelectedAgentFromSheet();
+    syncForm();
+    saveState();
+    render();
+    if(status) status.textContent = `Agent list updated from Google Sheet (${agents.length} agent${agents.length === 1 ? "" : "s"}).`;
+  }catch(error){
+    try{
+      const cached = JSON.parse(localStorage.getItem("blue-lily-agent-cache") || "[]");
+      if(Array.isArray(cached) && cached.length){
+        agents = cached;
+        populateAgentSelect();
+        updateSelectedAgentFromSheet();
+        syncForm();
+        render();
+        if(status) status.textContent = "Using cached agent list. Check Google Sheet sharing if new agents do not appear.";
+        return;
+      }
+    }catch(cacheError){}
+    populateAgentSelect();
+    if(status) status.textContent = "Could not load agent list. Make sure the Google Sheet is shared for viewing.";
+    console.error("Agent sheet load failed:", error);
+  }
+}
+
+function parseAgentCsv(csvText){
+  const rows = parseCsv(csvText).filter(row => row.some(cell => String(cell || "").trim()));
+  if(!rows.length) return [];
+  const headers = rows[0].map(header => String(header || "").trim().toLowerCase());
+  const index = {
+    name: findHeader(headers, ["name", "agent", "prepared by", "preparedby"]),
+    phone: findHeader(headers, ["number", "phone", "cell", "mobile", "contact"]),
+    email: findHeader(headers, ["email", "e-mail", "mail"]),
+    ffc: findHeader(headers, ["ffc", "agent ffc", "ffcnr", "ffc number"]),
+  };
+  return rows.slice(1).map(row => ({
+    name: String(row[index.name] || "").trim(),
+    phone: String(row[index.phone] || "").trim(),
+    email: String(row[index.email] || "").trim(),
+    ffc: String(row[index.ffc] || "").trim(),
+    website: AGENT_WEBSITE
+  })).filter(agent => agent.name);
+}
+
+function parseCsv(text){
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let inQuotes = false;
+  for(let i = 0; i < text.length; i += 1){
+    const char = text[i];
+    const next = text[i + 1];
+    if(char === '"'){
+      if(inQuotes && next === '"'){ cell += '"'; i += 1; }
+      else inQuotes = !inQuotes;
+    }else if(char === "," && !inQuotes){
+      row.push(cell);
+      cell = "";
+    }else if((char === "\n" || char === "\r") && !inQuotes){
+      if(char === "\r" && next === "\n") i += 1;
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = "";
+    }else{
+      cell += char;
+    }
+  }
+  row.push(cell);
+  rows.push(row);
+  return rows;
+}
+
+function findHeader(headers, candidates){
+  for(const candidate of candidates){
+    const exact = headers.findIndex(header => normalizeHeader(header) === normalizeHeader(candidate));
+    if(exact !== -1) return exact;
+  }
+  for(const candidate of candidates){
+    const partial = headers.findIndex(header => normalizeHeader(header).includes(normalizeHeader(candidate)));
+    if(partial !== -1) return partial;
+  }
+  return -1;
+}
+
+function normalizeHeader(value){
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function dedupeAgents(list){
+  const seen = new Set();
+  return (list || []).filter(agent => {
+    const key = normalize(agent.name);
+    if(!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function applyAgentByName(agentName){
+  const selected = agents.find(agent => normalize(agent.name) === normalize(agentName));
+  if(!selected) return;
+  state.preparedBy = selected.name;
+  state.agentPhone = selected.phone || "";
+  state.agentEmail = selected.email || "";
+  state.agentFfc = selected.ffc || "";
+  state.agentWebsite = AGENT_WEBSITE;
+}
+
+function updateSelectedAgentFromSheet(){
+  if(!state.preparedBy) return;
+  applyAgentByName(state.preparedBy);
+}
+
 function bindInputs(){
   renderComparableInputs();
   document.querySelectorAll("[data-field]").forEach(input => {
     input.addEventListener("input", () => {
       state[input.dataset.field] = input.value;
+      if(input.dataset.field === "preparedBy"){
+        applyAgentByName(input.value);
+        syncForm();
+      }
       saveState();
       render();
     });
     input.addEventListener("change", () => {
       state[input.dataset.field] = input.value;
+      if(input.dataset.field === "preparedBy"){
+        applyAgentByName(input.value);
+        syncForm();
+      }
       saveState();
       render();
     });
   });
-  document.getElementById("activeImages").addEventListener("change", event => handleImages(event, "activeImages", 6));
-  document.getElementById("offerImages").addEventListener("change", event => handleImages(event, "offerImages", 4));
+  document.getElementById("activeImages").addEventListener("change", event => handleImages(event, "activeImages", 5));
+  document.getElementById("offerImages").addEventListener("change", event => handleImages(event, "offerImages", 5));
   document.getElementById("loadSample").addEventListener("click", () => {
     state = { ...sampleData };
     syncForm();
@@ -418,6 +571,7 @@ function handleImages(event, key, limit){
 }
 
 function syncForm(){
+  lockWebsite();
   state.propertyType = normalizePropertyType(state.propertyType);
   ensureRows();
   document.querySelectorAll("[data-field]").forEach(input => {
@@ -427,6 +581,7 @@ function syncForm(){
 }
 
 function render(){
+  lockWebsite();
   const view = computedView();
   document.querySelectorAll("[data-out]").forEach(el => {
     const field = el.dataset.out;
@@ -440,13 +595,14 @@ function render(){
   document.querySelectorAll("[data-price]").forEach(el => {
     el.textContent = money(view.prices[el.dataset.price]);
   });
-  renderImages("activeCollage", state.activeImages || [], 6);
-  renderImages("offerCollage", state.offerImages || [], 4);
+  renderImages("activeCollage", state.activeImages || [], 5);
+  renderImages("offerCollage", state.offerImages || [], 5);
   renderThumbs("activeList", state.activeImages || [], "activeImages");
   renderThumbs("offerList", state.offerImages || [], "offerImages");
   renderCalculatedFields(view);
   updateComparableOutputs(view);
   renderFica();
+  applyDynamicFitting();
 }
 
 function computedView(){
@@ -647,6 +803,28 @@ function renderThumbs(targetId, images, key){
   });
 }
 
+function lockWebsite(){
+  state.agentWebsite = AGENT_WEBSITE;
+}
+
+function applyDynamicFitting(){
+  fitElement(document.querySelector('[data-fit="address"]'), 28, 14);
+  fitElement(document.querySelector('[data-fit="fica"]'), 13.7, 8.4);
+}
+
+function fitElement(el, startSize, minSize){
+  if(!el) return;
+  let size = startSize;
+  el.style.fontSize = `${size}px`;
+  // Force measurement immediately so the export sees the fitted size.
+  void el.offsetHeight;
+  while(size > minSize && (el.scrollHeight > el.clientHeight || el.scrollWidth > el.clientWidth)){
+    size -= 0.5;
+    el.style.fontSize = `${size}px`;
+    void el.offsetHeight;
+  }
+}
+
 function renderFica(){
   const sections = [];
   [state.fica1, state.fica2].forEach(key => {
@@ -676,7 +854,7 @@ function saveState(){
 function loadState(){
   try{
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    if(stored && typeof stored === "object") state = { ...defaultData, ...stored, propertyType: normalizePropertyType(stored.propertyType) };
+    if(stored && typeof stored === "object") state = { ...defaultData, ...stored, agentWebsite: AGENT_WEBSITE, propertyType: normalizePropertyType(stored.propertyType) };
     ensureRows();
   }catch(error){
     state = makeCleanState();
@@ -702,7 +880,7 @@ function importBackup(event){
   reader.onload = () => {
     try{
       const imported = JSON.parse(reader.result);
-      state = { ...defaultData, ...imported, propertyType: normalizePropertyType(imported.propertyType) };
+      state = { ...defaultData, ...imported, agentWebsite: AGENT_WEBSITE, propertyType: normalizePropertyType(imported.propertyType) };
       ensureRows();
       syncForm();
       saveState();
@@ -813,3 +991,6 @@ bindInputs();
 loadState();
 syncForm();
 render();
+loadAgentsFromSheet();
+agentRefreshTimer = window.setInterval(() => loadAgentsFromSheet({ silent: true }), AGENT_REFRESH_MS);
+window.addEventListener("focus", () => loadAgentsFromSheet({ silent: true }));

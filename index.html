@@ -31,11 +31,12 @@
         <div class="grid two">
           <label>Owner<input data-field="owner" type="text" /></label>
           <label>Address<input data-field="address" type="text" /></label>
-          <label>Prepared by<input data-field="preparedBy" type="text" /></label>
+          <label>Prepared by<select data-field="preparedBy" class="agent-select"><option value="">Loading agents...</option></select></label>
           <label>Agent FFC<input data-field="agentFfc" type="text" /></label>
           <label>Number<input data-field="agentPhone" type="text" /></label>
           <label>Email<input data-field="agentEmail" type="email" /></label>
-          <label class="full">Website<input data-field="agentWebsite" type="text" /></label>
+          <label class="full">Website<input data-field="agentWebsite" type="text" value="bluelilysa.co.za" readonly /></label>
+          <div id="agentSheetStatus" class="backend-status full">Agent list connects to Google Sheet backend.</div>
         </div>
       </section>
 
@@ -177,7 +178,7 @@
           <div class="section-title cover-title">CLIENT INFORMATION:</div>
           <div class="cover-info">
             <div class="cover-label">OWNER:</div><div class="cover-value big" data-out="owner"></div>
-            <div class="cover-label">ADDRESS:</div><div class="cover-value" data-out="address"></div>
+            <div class="cover-label">ADDRESS:</div><div class="cover-value fit-address" data-out="address" data-fit="address"></div>
           </div>
           <img class="cover-logo" src="assets/blue-lily-logo.jpg" alt="Blue Lily Properties logo" />
           <div class="section-title prepared-title">PREPARED BY:</div>
@@ -336,7 +337,7 @@
           <img class="corner-logo" src="assets/blue-lily-logo.jpg" alt="" />
           <img class="watermark" src="assets/blue-lily-logo.jpg" alt="" />
           <h1 class="page-heading wide fica-heading">SELLER FICA AND<br />COMPLIANCE CERTIFICATES</h1>
-          <div id="ficaOutput" class="fica-output"></div>
+          <div id="ficaOutput" class="fica-output" data-fit="fica"></div>
           <footer class="footer">Reg No: 2021/788520&nbsp;&nbsp; PPRA: F150346<br />E.Potgieter l R. Van Aardt</footer>
         </section>
 
