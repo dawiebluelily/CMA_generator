@@ -115,3 +115,11 @@ input[readonly]{background:#eef6ff;color:var(--deep);font-weight:900;cursor:not-
 }
 
 @media(max-width:850px){.brand-wrap{width:100%}.brand-logo{width:56px;height:56px}}
+
+/* v23: prevent upload controls from bleeding into the PDF preview/export */
+.pdf-report input[type="file"],
+.pdf-page input[type="file"],
+.preview-panel input[type="file"]{
+  display:none!important;
+  visibility:hidden!important;
+}

@@ -897,14 +897,8 @@ function parseTvaReport(text){
   // Sectional/unit reports use the unit/complex line plus street plus suburb.
   // Full-title/freehold reports often repeat the street in the title and the Street field,
   // so we use the Street field once only, then suburb/town.
-  let addressParts = [];
-  if(isTvaSectional){
-    addressParts = [titlePart, streetPart, suburbPart];
-  }else{
-    addressParts = [streetPart || titlePart, suburbPart];
-  }
-  addressParts = uniqueAddressParts(addressParts);
-  if(addressParts.length) data.address = addressParts.join(", ");
+  const importedAddress = buildTvaAddress(titlePart, streetPart, suburbPart, isTvaSectional);
+  if(importedAddress) data.address = importedAddress;
 
   const standSize = valueAfterLabel(lines, "Stand Size");
   if(standSize){
@@ -1101,6 +1095,7 @@ function applyImportedReport(parsed){
 
   lockWebsite();
   state.propertyType = normalizePropertyType(state.propertyType);
+  state.address = sanitizeAddressForOutput(state.address);
   applySectionalSizeRules(state);
   if(state.propertyType === "SECTIONAL"){
     state.soldRows = clearSectionalPlotSizes(state.soldRows, state.propertyType);
@@ -1785,3 +1780,85 @@ render();
 loadAgentsFromSheet();
 agentRefreshTimer = window.setInterval(() => loadAgentsFromSheet({ silent: true }), AGENT_REFRESH_MS);
 window.addEventListener("focus", () => loadAgentsFromSheet({ silent: true }));
+
+// v23 robust address sanitising and TVA/full-title address build
+function addressKey(value){
+  return normalizeReportLabel(value)
+    .replace(/\bstreet\b/g, "st")
+    .replace(/\broad\b/g, "rd")
+    .replace(/\bavenue\b/g, "ave")
+    .replace(/\bdrive\b/g, "dr")
+    .replace(/\blane\b/g, "ln")
+    .replace(/\bplace\b/g, "pl");
+}
+
+function cleanAddressPart(part){
+  let value = String(part || "")
+    .replace(/\s+/g, " ")
+    .replace(/^[,\s]+|[,\s]+$/g, "")
+    .trim();
+  if(!value) return "";
+
+  const words = value.split(/\s+/);
+  for(let len = Math.floor(words.length / 2); len >= 2; len -= 1){
+    const first = words.slice(0, len).join(" ");
+    const second = words.slice(len, len * 2).join(" ");
+    if(addressKey(first) && addressKey(first) === addressKey(second)){
+      value = [first, ...words.slice(len * 2)].join(" ").trim();
+      break;
+    }
+  }
+  return value;
+}
+
+function uniqueAddressParts(parts){
+  const seen = new Set();
+  return (parts || [])
+    .map(part => cleanAddressPart(part))
+    .filter(part => part && part !== "-")
+    .filter(part => {
+      const key = addressKey(part);
+      if(seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function sanitizeAddressForOutput(value){
+  const rawParts = String(value || "")
+    .replace(/\n+/g, ", ")
+    .split(",")
+    .map(part => cleanAddressPart(part))
+    .filter(Boolean);
+
+  const cleaned = [];
+  rawParts.forEach(part => {
+    let current = cleanAddressPart(part);
+    if(!current) return;
+
+    const previous = cleaned[cleaned.length - 1];
+    if(previous){
+      const prevKey = addressKey(previous);
+      const currentKey = addressKey(current);
+      if(currentKey === prevKey) return;
+      if(prevKey && currentKey.startsWith(prevKey + " ")){
+        const possibleRemainder = current.slice(previous.length).replace(/^[,\s-]+/, "").trim();
+        current = cleanAddressPart(possibleRemainder);
+        if(!current) return;
+      }
+    }
+
+    if(cleaned.some(existing => addressKey(existing) === addressKey(current))) return;
+    cleaned.push(current);
+  });
+
+  return cleaned.join(", ");
+}
+
+function buildTvaAddress(titlePart, streetPart, suburbPart, isSectional){
+  const title = cleanAddressPart(titlePart);
+  const street = cleanAddressPart(streetPart);
+  const suburb = cleanAddressPart(suburbPart);
+  const parts = isSectional ? [title, street, suburb] : [street || title, suburb];
+  return sanitizeAddressForOutput(uniqueAddressParts(parts).join(", "));
+}

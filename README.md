@@ -157,3 +157,8 @@ Notes:
 - TVA full-title/freehold reports now use the Street field once only, then suburb/town.
 - TVA full-title/freehold Stand Size imports as Erf Size and Under Roof remains blank.
 - TVA unit/sectional reports still import unit/complex + street + suburb, and Stand Size goes to Under Roof.
+
+## v23 fix
+- Rebuilt TVA/freehold address import so the report title line is not reused as the street.
+- Added final address sanitising after PDF import to remove duplicate address parts such as "64 Mark Street, 64 Mark Street".
+- Prevented file upload controls from appearing inside the PDF preview/export area.
