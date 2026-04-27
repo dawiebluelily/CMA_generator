@@ -46,7 +46,7 @@
           <label>Under roof m²<input data-field="underRoof" type="number" min="0" /></label>
           <label>Purchase price<input data-field="purchasePrice" type="number" min="0" step="1000" /></label>
           <label>Purchase date<input data-field="purchaseDate" type="date" /></label>
-          <label>Property type<input data-field="propertyType" type="text" /></label>
+          <label>Property type<select data-field="propertyType" class="property-type-select"></select></label>
           <label>Condition
             <select data-field="condition">
               <option>Fixer Upper</option>
@@ -65,17 +65,51 @@
         </div>
       </section>
 
-      <section class="form-card open">
-        <h2>3. Market Statistics / Price</h2>
+      <section class="form-card open market-calc-card">
+        <h2>3. Market Statistics / Price Calculator</h2>
+        <p class="small-note">This follows Sheet 1: sold comparables, current competition, recommended price, price bands and API market type.</p>
         <div class="grid two">
           <label>Market area<input data-field="marketArea" type="text" /></label>
-          <label>Competing properties<input data-field="competing" type="number" min="0" /></label>
-          <label>Recent sales<input data-field="recentSales" type="number" min="0" /></label>
-          <label>Highest sales price<input data-field="highestPrice" type="number" min="0" step="1000" /></label>
-          <label>Lowest sales price<input data-field="lowestPrice" type="number" min="0" step="1000" /></label>
-          <label>Median sales price<input data-field="medianPrice" type="number" min="0" step="1000" /></label>
-          <label>Average price per m²<input data-field="avgPsm" type="number" min="0" step="1" /></label>
-          <label>Market value<input data-field="marketValue" type="number" min="0" step="1000" /></label>
+          <label>Competing properties / advertised in 12 months<input data-field="competing" type="number" min="0" /></label>
+          <label>Recent sales / sold in past 12 months<input data-field="recentSales" type="number" min="0" /></label>
+        </div>
+
+        <div class="calc-block">
+          <h3>Sold in the past year similar to client property</h3>
+          <div class="comp-head"><span>Plot size m²</span><span>Built area m²</span><span>Sales price</span><span>Price / m²</span></div>
+          <div id="soldRows" class="comp-table"></div>
+        </div>
+
+        <div class="calc-block">
+          <h3>Currently on the market</h3>
+          <div class="comp-head"><span>Plot size m²</span><span>Built area m²</span><span>Sales price</span><span>Price / m²</span></div>
+          <div id="activeRows" class="comp-table"></div>
+        </div>
+
+        <div class="calc-summary">
+          <div><span>Lowest Sales Price</span><b data-calc="lowestPrice" data-money="true"></b></div>
+          <div><span>Average Sold Price</span><b data-calc="soldAveragePrice" data-money="true"></b></div>
+          <div><span>Median</span><b data-calc="medianPrice" data-money="true"></b></div>
+          <div><span>Recommended Price</span><b data-calc="marketValue" data-money="true"></b></div>
+          <div><span>Highest Sold</span><b data-calc="highestPrice" data-money="true"></b></div>
+          <div><span>Average Price per m²</span><b data-calc="avgPsm" data-money="true"></b></div>
+          <div><span>Highest Advertised</span><b data-calc="activeHighestPrice" data-money="true"></b></div>
+          <div><span>Lowest Advertised</span><b data-calc="activeLowestPrice" data-money="true"></b></div>
+          <div><span>Highest Advertised Price per m²</span><b data-calc="activeHighestPsm" data-money="true"></b></div>
+          <div><span>Sold per month</span><b data-calc="soldPerMonth"></b></div>
+          <div><span>API</span><b data-calc="apiPercent"></b></div>
+          <div><span>Type of Market</span><b data-calc="marketType"></b></div>
+        </div>
+
+        <div class="calc-summary price-bands-summary">
+          <div><span>Fixer Upper / 15% Below</span><b data-price="below15"></b></div>
+          <div><span>Needs Some Work / 10% Below</span><b data-price="below10"></b></div>
+          <div><span>Recommended</span><b data-price="market"></b></div>
+          <div><span>Good / 10% Above</span><b data-price="above10"></b></div>
+          <div><span>Exceptional / 15% Above</span><b data-price="above15"></b></div>
+        </div>
+
+        <div class="grid two">
           <label class="full">Recommendation
             <select data-field="recommendation">
               <option>Market Value</option>
@@ -167,7 +201,7 @@
               <div>UNDER ROOF:<b data-out="underRoof"></b><span>m²</span></div>
               <div>PURCHASE PRICE:<b data-out="purchasePrice" data-money="true"></b></div>
               <div>PURCHASE DATE:<b data-out="purchaseDateFormatted"></b></div>
-              <div>PROPERY TYPE:<b data-out="propertyType"></b></div>
+              <div>PROPERTY TYPE:<b data-out="propertyType"></b></div>
             </div>
             <div class="condition-panel">
               <h2>CONDITION:</h2>

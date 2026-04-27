@@ -1,56 +1,59 @@
-# Blue Lily CMA PDF Builder
+# Blue Lily CMA Online App - v5
 
-This is a static online app for creating the Blue Lily Comparative Market Analysis PDF from an online form.
+This version includes the Sheet 1 calculation logic from the original Excel workbook.
 
-## Files
+## What is included
 
-- `index.html` - the app layout and 10-page PDF preview
-- `styles.css` - Blue Lily styling and PDF page layout
-- `app.js` - form logic, calculations, FICA/ownership/compliance output, image uploads and PDF export
-- `assets/blue-lily-logo.jpg` - Blue Lily logo used in the PDF template
+- 10-page Blue Lily CMA PDF preview and export.
+- Property type dropdown matching the original sheet:
+  - SECTIONAL
+  - RESIDENTIAL
+  - COMMERCIAL
+  - AGRICULTURAL
+  - INDUSTRIAL
+  - VACANT LAND
+- Market calculator for:
+  - Sold comparable properties
+  - Currently on the market properties
+  - Price per m² per comparable
+  - Lowest sold price
+  - Average sold price
+  - Median price
+  - Highest sold price
+  - Average price per m²
+  - Recommended market value
+  - 15% below, 10% below, market value, 10% above and 15% above
+  - Absorption Based Price Index (API)
+  - Buyer / shifting / seller market indicator
+- On-market image upload page.
+- Under-offer screenshot upload page.
+- Seller FICA and compliance page.
+- Export PDF button.
+- Backup/import JSON option.
 
-## What the app exports
+## Formula logic added
 
-The export follows the 10-page Blue Lily CMA template:
+The app follows the same logic as Sheet 1:
 
-1. Comparative Market Analysis cover page
-2. Property Information
-3. Price to Sell
-4. Why Sell at Market Value
-5. The Competition - On the Market
-6. The Competition - Under Offer
-7. Why an Exclusive Mandate
-8. Seller Info
-9. Seller FICA and Compliance Certificates
-10. Our Commitment To You
+- Sold price per m² = Sales Price / Built Area
+- Highest sold price = MAX of sold comparable sales prices
+- Lowest sold price = MIN of sold comparable sales prices
+- Average sold price = AVERAGE of sold comparable sales prices
+- Median = MEDIAN of sold comparable sales prices
+- Average price per m² = AVERAGE of sold comparable price per m² values
+- Active price per m² = Sales Price / Built Area
+- Active highest advertised = MAX of active listing sales prices
+- Active lowest advertised = MIN of active listing sales prices
+- Active highest price per m² = MAX of active listing price per m² values
+- Client estimated values = Client under-roof size x comparable price per m² highs/lows
+- Recommended price = AVERAGE of sold prices, active advertised prices and client estimated values
+- API = (Recent Sales / 12) / Competing Properties
+- Market type:
+  - API above 20% = Sellers Market
+  - API below 15% = Buyers Market
+  - API between 15% and 20% = Shifting Market
 
-## How to use locally
+## Deployment
 
-Open `index.html` in a browser. For best PDF export results, use Chrome or Edge.
-
-## How to deploy online
-
-### Netlify drag-and-drop
-
-1. Go to Netlify.
-2. Create a new site.
-3. Drag the full folder into the deploy area.
-4. Open the published link.
-
-### GitHub Pages
-
-1. Upload these files to a GitHub repository.
-2. Go to Settings > Pages.
-3. Set the branch to `main` and folder to `/root`.
-4. Publish.
-
-## PDF export
-
-The app uses `html2pdf.js` from a CDN for one-click PDF export. If the CDN is blocked, use the `Print / Save PDF` button and choose Save as PDF in the browser print dialog.
-
-## Data and privacy
-
-- Form data is saved only in the browser local storage.
-- Uploaded images stay in the browser and are not sent to a server.
-- Use `Download backup` to save a JSON backup of a CMA.
-- Use `Import backup` to reload a previous CMA.
+Upload the full folder to Netlify, GitHub Pages or any static hosting provider.
+Open `index.html` locally to test.

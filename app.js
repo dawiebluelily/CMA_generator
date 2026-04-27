@@ -1,4 +1,13 @@
-const STORAGE_KEY = "blue-lily-cma-builder-v2";
+const STORAGE_KEY = "blue-lily-cma-builder-v5";
+
+const PROPERTY_TYPES = [
+  "SECTIONAL",
+  "RESIDENTIAL",
+  "COMMERCIAL",
+  "AGRICULTURAL",
+  "INDUSTRIAL",
+  "VACANT LAND"
+];
 
 const FICA = {
   "": { heading: "", bullets: [] },
@@ -191,6 +200,10 @@ const STANDARD_DOCS = {
   ]
 };
 
+function blankRows(count){
+  return Array.from({ length: count }, () => ({ plotSize: "", builtArea: "", salesPrice: "" }));
+}
+
 const COMPLIANCE = {
   electrical: {
     heading: "COMPLIANCE - Electrical Certificate of Compliance",
@@ -266,6 +279,8 @@ const defaultData = {
   medianPrice: "",
   avgPsm: "",
   marketValue: "",
+  soldRows: blankRows(8),
+  activeRows: blankRows(7),
   recommendation: "Market Value",
   recommendationText: "RECOMMENDED TO SELL AT MARKET VALUE",
   fica1: "Individual",
@@ -295,7 +310,7 @@ const sampleData = {
   underRoof: "400",
   purchasePrice: "1750000",
   purchaseDate: "2013-04-01",
-  propertyType: "VACANT",
+  propertyType: "VACANT LAND",
   condition: "Good",
   feature1: "XXX",
   feature2: "XXXX",
@@ -311,6 +326,18 @@ const sampleData = {
   medianPrice: "1022500",
   avgPsm: "8894",
   marketValue: "2178291",
+  soldRows: [
+    { plotSize: "", builtArea: "111", salesPrice: "995000" },
+    { plotSize: "", builtArea: "119", salesPrice: "1050000" },
+    ...blankRows(6)
+  ],
+  activeRows: [
+    { plotSize: "", builtArea: "123", salesPrice: "1200000" },
+    { plotSize: "", builtArea: "102", salesPrice: "995000" },
+    { plotSize: "", builtArea: "102", salesPrice: "995000" },
+    { plotSize: "", builtArea: "105", salesPrice: "1150000" },
+    ...blankRows(3)
+  ],
   recommendation: "Market Value",
   recommendationText: "RECOMENDED TO SELL AT MARKET VALUE",
   fica1: "Individual",
@@ -327,9 +354,12 @@ const sampleData = {
   offerImages: []
 };
 
-let state = { ...defaultData };
+let state = makeCleanState();
 
 function populateSelects(){
+  document.querySelectorAll(".property-type-select").forEach(select => {
+    select.innerHTML = `<option value="">Select property type</option>` + PROPERTY_TYPES.map(key => `<option value="${escapeHtml(key)}">${key}</option>`).join("");
+  });
   document.querySelectorAll(".fica-select").forEach(select => {
     select.innerHTML = Object.keys(FICA).map(key => `<option value="${escapeHtml(key)}">${key || "None"}</option>`).join("");
   });
@@ -339,6 +369,7 @@ function populateSelects(){
 }
 
 function bindInputs(){
+  renderComparableInputs();
   document.querySelectorAll("[data-field]").forEach(input => {
     input.addEventListener("input", () => {
       state[input.dataset.field] = input.value;
@@ -360,7 +391,7 @@ function bindInputs(){
     render();
   });
   document.getElementById("clearData").addEventListener("click", () => {
-    state = { ...defaultData, activeImages: [], offerImages: [] };
+    state = makeCleanState();
     syncForm();
     saveState();
     render();
@@ -387,9 +418,12 @@ function handleImages(event, key, limit){
 }
 
 function syncForm(){
+  state.propertyType = normalizePropertyType(state.propertyType);
+  ensureRows();
   document.querySelectorAll("[data-field]").forEach(input => {
     input.value = state[input.dataset.field] ?? "";
   });
+  renderComparableInputs();
 }
 
 function render(){
@@ -410,17 +444,83 @@ function render(){
   renderImages("offerCollage", state.offerImages || [], 4);
   renderThumbs("activeList", state.activeImages || [], "activeImages");
   renderThumbs("offerList", state.offerImages || [], "offerImages");
+  renderCalculatedFields(view);
+  updateComparableOutputs(view);
   renderFica();
 }
 
 function computedView(){
-  const market = number(state.marketValue) || number(state.medianPrice) || 0;
+  ensureRows();
+  const sold = normalizeComparableRows(state.soldRows);
+  const active = normalizeComparableRows(state.activeRows);
+  const soldPrices = sold.map(row => row.salesPrice).filter(Boolean);
+  const activePrices = active.map(row => row.salesPrice).filter(Boolean);
+  const soldPsm = sold.map(row => row.pricePsm).filter(Boolean);
+  const activePsm = active.map(row => row.pricePsm).filter(Boolean);
+  const underRoof = number(state.underRoof);
+
+  const soldEstimateHigh = underRoof && soldPsm.length ? underRoof * max(soldPsm) : 0;
+  const soldEstimateLow = underRoof && soldPsm.length ? underRoof * min(soldPsm) : 0;
+  const activeEstimateHigh = underRoof && activePsm.length ? underRoof * max(activePsm) : 0;
+  const activeEstimateLow = underRoof && activePsm.length ? underRoof * min(activePsm) : 0;
+
+  const recommendedValues = [
+    ...soldPrices,
+    ...activePrices,
+    soldEstimateHigh,
+    soldEstimateLow,
+    activeEstimateHigh,
+    activeEstimateLow
+  ].filter(Boolean);
+
+  const calculatedMarketValue = average(recommendedValues);
+  const manualMarket = number(state.marketValue);
+  const market = calculatedMarketValue || manualMarket || number(state.medianPrice) || 0;
+  const recentSales = number(state.recentSales);
+  const competing = number(state.competing);
+  const soldPerMonth = recentSales ? recentSales / 12 : 0;
+  const api = competing ? soldPerMonth / competing : 0;
+  const marketType = api > 0.2 ? "Sellers Market" : (api < 0.15 ? "Buyers Market" : "Shifting Market");
+
   const recommendation = state.recommendation === "Custom" && state.recommendationText.trim()
     ? state.recommendationText.trim()
     : state.recommendationText.trim() || `RECOMMENDED TO SELL AT ${String(state.recommendation || "Market Value").toUpperCase()}`;
+
   return {
     purchaseDateFormatted: formatDate(state.purchaseDate),
     recommendationFinal: recommendation,
+    highestPrice: max(soldPrices) || number(state.highestPrice),
+    lowestPrice: min(soldPrices) || number(state.lowestPrice),
+    medianPrice: median(soldPrices) || number(state.medianPrice),
+    avgPsm: average(soldPsm) || number(state.avgPsm),
+    marketValue: market,
+    calculatedMarketValue,
+    soldRows: sold,
+    activeRows: active,
+    soldHighestSales: max(soldPrices),
+    soldHighestPsm: max(soldPsm),
+    soldAveragePsm: average(soldPsm),
+    soldLowestSales: min(soldPrices),
+    soldAveragePrice: average(soldPrices),
+    soldMedianPrice: median(soldPrices),
+    activeHighestPrice: max(activePrices),
+    activeLowestPrice: min(activePrices),
+    activeHighestPsm: max(activePsm),
+    soldEstimateHigh,
+    soldEstimateLow,
+    activeEstimateHigh,
+    activeEstimateLow,
+    soldPerMonth,
+    api,
+    apiPercent: api ? `${Math.round(api * 100)}%` : "",
+    marketType,
+    priceNames: {
+      below15: "Fixer Upper",
+      below10: "Needs Some Work",
+      market: "Recommended",
+      above10: "Good",
+      above15: "Exceptional"
+    },
     prices: {
       below15: market * 0.85,
       below10: market * 0.9,
@@ -429,6 +529,91 @@ function computedView(){
       above15: market * 1.15
     }
   };
+}
+
+function renderComparableInputs(){
+  ensureRows();
+  const configs = [
+    { key: "soldRows", target: "soldRows", label: "Sold" },
+    { key: "activeRows", target: "activeRows", label: "Active" }
+  ];
+  configs.forEach(config => {
+    const target = document.getElementById(config.target);
+    if(!target) return;
+    target.innerHTML = state[config.key].map((row, index) => `
+      <div class="comp-row" data-table="${config.key}" data-index="${index}">
+        <input data-comp-field="plotSize" type="number" min="0" placeholder="Plot" value="${escapeHtml(row.plotSize || "")}" />
+        <input data-comp-field="builtArea" type="number" min="0" placeholder="Built" value="${escapeHtml(row.builtArea || "")}" />
+        <input data-comp-field="salesPrice" type="number" min="0" step="1000" placeholder="Price" value="${escapeHtml(row.salesPrice || "")}" />
+        <span class="comp-psm" data-psm="${config.key}-${index}"></span>
+      </div>
+    `).join("");
+    target.querySelectorAll("input").forEach(input => {
+      input.addEventListener("input", () => {
+        const rowEl = input.closest(".comp-row");
+        const table = rowEl.dataset.table;
+        const rowIndex = Number(rowEl.dataset.index);
+        const field = input.dataset.compField;
+        state[table][rowIndex][field] = input.value;
+        saveState();
+        render();
+      });
+    });
+  });
+}
+
+function renderCalculatedFields(view){
+  document.querySelectorAll("[data-calc]").forEach(el => {
+    const key = el.dataset.calc;
+    let value = view[key] ?? "";
+    if(el.dataset.percent === "true") value = value ? `${Math.round(number(value) * 100)}%` : "";
+    if(el.dataset.money === "true") value = money(value);
+    if(el.dataset.integer === "true") value = value ? Math.round(number(value)).toString() : "";
+    if(el.tagName === "INPUT") el.value = value;
+    else el.textContent = value;
+  });
+}
+
+function updateComparableOutputs(view){
+  ["soldRows", "activeRows"].forEach(key => {
+    (view[key] || []).forEach((row, index) => {
+      const target = document.querySelector(`[data-psm="${key}-${index}"]`);
+      if(target) target.textContent = row.pricePsm ? money(row.pricePsm) : "";
+    });
+  });
+}
+
+function normalizeComparableRows(rows){
+  return (rows || []).map(row => {
+    const builtArea = number(row.builtArea);
+    const salesPrice = number(row.salesPrice);
+    return {
+      plotSize: number(row.plotSize),
+      builtArea,
+      salesPrice,
+      pricePsm: builtArea && salesPrice ? salesPrice / builtArea : 0
+    };
+  });
+}
+
+function ensureRows(){
+  state.soldRows = normalizeRowArray(state.soldRows, 8);
+  state.activeRows = normalizeRowArray(state.activeRows, 7);
+}
+
+function normalizeRowArray(rows, length){
+  const source = Array.isArray(rows) ? rows : [];
+  const cleaned = source.map(row => ({
+    plotSize: row?.plotSize ?? "",
+    builtArea: row?.builtArea ?? "",
+    salesPrice: row?.salesPrice ?? ""
+  }));
+  while(cleaned.length < length) cleaned.push({ plotSize: "", builtArea: "", salesPrice: "" });
+  return cleaned.slice(0, length);
+}
+
+function makeCleanState(){
+  return { ...defaultData, soldRows: blankRows(8), activeRows: blankRows(7), activeImages: [], offerImages: [] };
 }
 
 function renderImages(targetId, images, limit){
@@ -491,9 +676,10 @@ function saveState(){
 function loadState(){
   try{
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    if(stored && typeof stored === "object") state = { ...defaultData, ...stored };
+    if(stored && typeof stored === "object") state = { ...defaultData, ...stored, propertyType: normalizePropertyType(stored.propertyType) };
+    ensureRows();
   }catch(error){
-    state = { ...defaultData };
+    state = makeCleanState();
   }
 }
 
@@ -516,7 +702,8 @@ function importBackup(event){
   reader.onload = () => {
     try{
       const imported = JSON.parse(reader.result);
-      state = { ...defaultData, ...imported };
+      state = { ...defaultData, ...imported, propertyType: normalizePropertyType(imported.propertyType) };
+      ensureRows();
       syncForm();
       saveState();
       render();
@@ -545,6 +732,29 @@ function exportPdf(){
   }).from(report).save();
 }
 
+function average(values){
+  const nums = values.map(number).filter(value => value !== 0 && Number.isFinite(value));
+  if(!nums.length) return 0;
+  return nums.reduce((sum, value) => sum + value, 0) / nums.length;
+}
+
+function median(values){
+  const nums = values.map(number).filter(value => value !== 0 && Number.isFinite(value)).sort((a, b) => a - b);
+  if(!nums.length) return 0;
+  const middle = Math.floor(nums.length / 2);
+  return nums.length % 2 ? nums[middle] : (nums[middle - 1] + nums[middle]) / 2;
+}
+
+function max(values){
+  const nums = values.map(number).filter(value => value !== 0 && Number.isFinite(value));
+  return nums.length ? Math.max(...nums) : 0;
+}
+
+function min(values){
+  const nums = values.map(number).filter(value => value !== 0 && Number.isFinite(value));
+  return nums.length ? Math.min(...nums) : 0;
+}
+
 function number(value){
   if(value === null || value === undefined || value === "") return 0;
   const clean = String(value).replace(/[^0-9.-]/g, "");
@@ -555,7 +765,7 @@ function number(value){
 function money(value){
   const n = number(value);
   if(!n) return "";
-  return "R " + Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  return "R\u00A0" + Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, "\u00A0");
 }
 
 function formatDate(value){
@@ -563,6 +773,27 @@ function formatDate(value){
   const date = new Date(`${value}T00:00:00`);
   if(Number.isNaN(date.getTime())) return value;
   return date.toLocaleDateString("en-ZA", { day: "2-digit", month: "long", year: "numeric" });
+}
+
+function normalizePropertyType(value){
+  const clean = String(value || "").trim().toUpperCase();
+  const aliases = {
+    "VACANT": "VACANT LAND",
+    "VACANT LAND": "VACANT LAND",
+    "SECTIONAL": "SECTIONAL",
+    "SECTIONAL TITLE": "SECTIONAL",
+    "RESIDENTIAL": "RESIDENTIAL",
+    "FREEHOLD": "RESIDENTIAL",
+    "FULL TITLE": "RESIDENTIAL",
+    "COMMERCIAL": "COMMERCIAL",
+    "FARM": "AGRICULTURAL",
+    "AGRICULTURAL": "AGRICULTURAL",
+    "AGRICULTURAL HOLDING": "AGRICULTURAL",
+    "INDUSTRIAL": "INDUSTRIAL",
+    "TOWNHOUSE": "SECTIONAL",
+    "APARTMENT": "SECTIONAL"
+  };
+  return aliases[clean] || (PROPERTY_TYPES.includes(clean) ? clean : value || "");
 }
 
 function normalize(value){
