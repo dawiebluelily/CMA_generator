@@ -564,7 +564,12 @@ function bindInputs(){
   document.getElementById("saveJson").addEventListener("click", downloadBackup);
   document.getElementById("importJson").addEventListener("change", importBackup);
   document.getElementById("exportPdf").addEventListener("click", exportPdf);
-  document.getElementById("printPdf").addEventListener("click", () => { render(); applyDynamicFitting(); setTimeout(() => window.print(), 60); });
+  document.getElementById("printPdf").addEventListener("click", () => {
+    render();
+    applyDynamicFitting();
+    document.body.classList.add("pdf-export-mode");
+    setTimeout(() => { window.print(); setTimeout(() => document.body.classList.remove("pdf-export-mode"), 500); }, 80);
+  });
 }
 
 function handleImages(event, key, limit){
@@ -1662,23 +1667,37 @@ async function exportPdf(){
   syncStateFromForm();
   render();
   applyDynamicFitting();
+  document.body.classList.add("pdf-export-mode");
   await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   applyDynamicFitting();
 
   const report = document.getElementById("pdfReport");
   if(typeof html2pdf === "undefined"){
     window.print();
+    document.body.classList.remove("pdf-export-mode");
     return;
   }
   const fileName = `${safeName(state.owner || "Blue-Lily-CMA")}.pdf`;
-  html2pdf().set({
-    margin: 0,
-    filename: fileName,
-    image: { type: "jpeg", quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff", scrollX: 0, scrollY: 0 },
-    jsPDF: { unit: "px", format: [768, 1024], orientation: "portrait", compress: true },
-    pagebreak: { mode: ["css", "legacy"], after: ".pdf-page" }
-  }).from(report).save();
+  try{
+    await html2pdf().set({
+      margin: 0,
+      filename: fileName,
+      image: { type: "jpeg", quality: 0.98 },
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: 768,
+        windowHeight: 1024
+      },
+      jsPDF: { unit: "px", format: [768, 1024], orientation: "portrait", compress: true },
+      pagebreak: { mode: ["css"], avoid: [".pdf-page"] }
+    }).from(report).save();
+  }finally{
+    document.body.classList.remove("pdf-export-mode");
+  }
 }
 
 function average(values){
