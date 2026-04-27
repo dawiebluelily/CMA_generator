@@ -1,4 +1,4 @@
-const STORAGE_KEY = "blue-lily-cma-builder-v20";
+const STORAGE_KEY = "blue-lily-cma-builder-v22";
 const AUTO_SAVE_ENABLED = false;
 const AGENT_SHEET_ID = "1OcpmU2rveF1s633NCvCy9BsZN--44lKocjqYSAx5wAY";
 const AGENT_SHEET_NAME = "Sheet1";
@@ -762,6 +762,18 @@ function uniqueAddressParts(parts){
     });
 }
 
+function isTvaSectionalReport(titleLine, street){
+  const title = String(titleLine || "").trim();
+  const streetValue = String(street || "").trim();
+  if(/^unit\s*\d+[\s,]/i.test(title) || /^unit\s*\d+$/i.test(title)) return true;
+  if(/unit\s*\d+/i.test(title) && !sameAddressPart(title, streetValue)) return true;
+  return false;
+}
+
+function sameAddressPart(a, b){
+  return normalizeReportLabel(a) === normalizeReportLabel(b);
+}
+
 function parseLoomReport(text){
   const lines = reportLines(text);
   const data = {};
@@ -876,14 +888,34 @@ function parseTvaReport(text){
   const province = valueAfterLabel(lines, "Province");
   if(province) data.province = titleCase(province);
 
-  const addressParts = [titleCase(titleLine), titleCase(street), titleCase(suburb || town)].filter(Boolean);
+  const titlePart = titleCase(titleLine);
+  const streetPart = titleCase(street);
+  const suburbPart = titleCase(suburb || town);
+  const isTvaSectional = isTvaSectionalReport(titleLine, street);
+
+  // TVA address rule:
+  // Sectional/unit reports use the unit/complex line plus street plus suburb.
+  // Full-title/freehold reports often repeat the street in the title and the Street field,
+  // so we use the Street field once only, then suburb/town.
+  let addressParts = [];
+  if(isTvaSectional){
+    addressParts = [titlePart, streetPart, suburbPart];
+  }else{
+    addressParts = [streetPart || titlePart, suburbPart];
+  }
+  addressParts = uniqueAddressParts(addressParts);
   if(addressParts.length) data.address = addressParts.join(", ");
 
   const standSize = valueAfterLabel(lines, "Stand Size");
   if(standSize){
     const size = integerFromText(standSize);
-    data.underRoof = size;
-    data.erfSize = "";
+    if(isTvaSectional){
+      data.underRoof = size;
+      data.erfSize = "";
+    }else{
+      data.erfSize = size;
+      data.underRoof = "";
+    }
   }
 
   const purchaseAmount = valueAfterLabel(lines, "Purchase Amount");
@@ -892,8 +924,8 @@ function parseTvaReport(text){
   const datePurchased = valueAfterLabel(lines, "Date Purchased");
   if(datePurchased) data.purchaseDate = dateToIso(datePurchased);
 
-  data.propertyType = "SECTIONAL";
-  data.ownershipType = "Sectional Title";
+  data.propertyType = isTvaSectional ? "SECTIONAL" : "FREEHOLD";
+  data.ownershipType = isTvaSectional ? "Sectional Title" : "Full Title";
   data.marketArea = titleCase(suburb || town || "");
 
   const valuation = findAutomatedValuation(lines);

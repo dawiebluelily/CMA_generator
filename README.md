@@ -151,3 +151,9 @@ Notes:
 - If a LOOM report only provides an erf/land extent for a freehold property, it imports to `Erf Size` and leaves `Under Roof` blank.
 - LOOM sectional-title imports still use `Deeds Extent` as the floor/under-roof size and keep `Erf Size` blank unless manually added.
 - LOOM address import is more flexible and stops before the Details/property-data section even when the report layout changes.
+
+
+## v22 update
+- TVA full-title/freehold reports now use the Street field once only, then suburb/town.
+- TVA full-title/freehold Stand Size imports as Erf Size and Under Roof remains blank.
+- TVA unit/sectional reports still import unit/complex + street + suburb, and Stand Size goes to Under Roof.
