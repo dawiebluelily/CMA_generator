@@ -1662,78 +1662,147 @@ async function exportPdf(){
   syncStateFromForm();
   render();
   applyDynamicFitting();
-  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  await nextPaint();
   applyDynamicFitting();
 
   const report = document.getElementById("pdfReport");
-  if(!report || typeof html2pdf === "undefined"){
+  const pages = report ? [...report.querySelectorAll(".pdf-page")] : [];
+  if(!report || !pages.length){
     window.print();
     return;
   }
 
-  const pages = [...report.querySelectorAll(".pdf-page")];
-  if(!pages.length){
+  const html2canvasFn = getHtml2Canvas();
+  const JsPDF = getJsPDF();
+  if(!html2canvasFn || !JsPDF){
     window.print();
     return;
   }
-
-  // Export from a clean, zero-gap clone so each 768 x 1024 sheet becomes exactly one PDF page.
-  // This avoids html2pdf adding a blank page after every template sheet because of preview gaps / CSS page breaks.
-  const exportRoot = document.createElement("div");
-  exportRoot.id = "pdfReportExport";
-  exportRoot.setAttribute("aria-hidden", "true");
-  exportRoot.style.position = "absolute";
-  exportRoot.style.left = "0";
-  exportRoot.style.top = "0";
-  exportRoot.style.width = "768px";
-  exportRoot.style.margin = "0";
-  exportRoot.style.padding = "0";
-  exportRoot.style.background = "#ffffff";
-  exportRoot.style.display = "block";
-  exportRoot.style.zIndex = "-1";
-  exportRoot.style.pointerEvents = "none";
-
-  pages.forEach(page => {
-    const clone = page.cloneNode(true);
-    clone.style.width = "768px";
-    clone.style.height = "1024px";
-    clone.style.margin = "0";
-    clone.style.padding = "0";
-    clone.style.boxShadow = "none";
-    clone.style.transform = "none";
-    clone.style.pageBreakAfter = "auto";
-    clone.style.breakAfter = "auto";
-    clone.style.overflow = "hidden";
-    exportRoot.appendChild(clone);
-  });
-
-  document.body.appendChild(exportRoot);
 
   const fileName = `${safeName(state.owner || "Blue-Lily-CMA")}.pdf`;
+  const exportRoot = buildPdfExportClone(report);
+
   try{
-    const worker = html2pdf().set({
-      margin: 0,
-      filename: fileName,
-      image: { type: "jpeg", quality: 0.98 },
-      html2canvas: {
+    document.body.appendChild(exportRoot);
+    await waitForImages(exportRoot);
+    await nextPaint();
+
+    const exportPages = [...exportRoot.querySelectorAll(".pdf-page")];
+    const pdf = new JsPDF({
+      unit: "px",
+      format: [768, 1024],
+      orientation: "portrait",
+      compress: true,
+      hotfixes: ["px_scaling"]
+    });
+
+    for(let index = 0; index < exportPages.length; index += 1){
+      const page = exportPages[index];
+      const canvas = await html2canvasFn(page, {
+        backgroundColor: "#ffffff",
         scale: 2,
         useCORS: true,
-        backgroundColor: "#ffffff",
-        scrollX: 0,
-        scrollY: 0,
+        allowTaint: false,
+        logging: false,
+        width: 768,
+        height: 1024,
         windowWidth: 768,
-        windowHeight: 1024
-      },
-      jsPDF: { unit: "px", format: [768, 1024], orientation: "portrait", compress: true },
-      pagebreak: { mode: [] }
-    }).from(exportRoot).save();
+        windowHeight: 1024,
+        scrollX: 0,
+        scrollY: 0
+      });
 
-    if(worker && typeof worker.then === "function"){
-      await worker;
+      if(index > 0){
+        pdf.addPage([768, 1024], "portrait");
+      }
+
+      pdf.setFillColor(255, 255, 255);
+      pdf.rect(0, 0, 768, 1024, "F");
+      pdf.addImage(canvas.toDataURL("image/jpeg", 0.98), "JPEG", 0, 0, 768, 1024, undefined, "FAST");
     }
+
+    pdf.save(fileName);
+  }catch(error){
+    console.error("PDF export failed:", error);
+    alert("The direct PDF export failed. The app will open Print / Save PDF instead.");
+    window.print();
   }finally{
     exportRoot.remove();
   }
+}
+
+function getHtml2Canvas(){
+  if(window.html2canvas) return window.html2canvas;
+  if(typeof html2canvas !== "undefined") return html2canvas;
+  return null;
+}
+
+function getJsPDF(){
+  if(window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF;
+  if(window.jsPDF) return window.jsPDF;
+  return null;
+}
+
+function nextPaint(){
+  return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+}
+
+function buildPdfExportClone(report){
+  const clone = report.cloneNode(true);
+  clone.id = "pdfReportExport";
+  clone.setAttribute("aria-hidden", "true");
+  clone.style.cssText = [
+    "position:absolute",
+    "left:-10000px",
+    "top:0",
+    "width:768px",
+    "margin:0",
+    "padding:0",
+    "display:block",
+    "gap:0",
+    "align-items:stretch",
+    "background:#ffffff",
+    "z-index:-1",
+    "overflow:visible"
+  ].join(";");
+
+  clone.querySelectorAll(".pdf-page").forEach(page => {
+    page.style.width = "768px";
+    page.style.height = "1024px";
+    page.style.minWidth = "768px";
+    page.style.minHeight = "1024px";
+    page.style.maxWidth = "768px";
+    page.style.maxHeight = "1024px";
+    page.style.margin = "0";
+    page.style.padding = "0";
+    page.style.display = "block";
+    page.style.position = "relative";
+    page.style.overflow = "hidden";
+    page.style.transform = "none";
+    page.style.transformOrigin = "top left";
+    page.style.boxShadow = "none";
+    page.style.background = "#ffffff";
+    page.style.pageBreakAfter = "auto";
+    page.style.breakAfter = "auto";
+  });
+
+  return clone;
+}
+
+function waitForImages(root){
+  const images = [...root.querySelectorAll("img")];
+  if(!images.length) return Promise.resolve();
+
+  return Promise.all(images.map(img => new Promise(resolve => {
+    if(img.complete && img.naturalWidth !== 0){
+      resolve();
+      return;
+    }
+    const finish = () => resolve();
+    img.addEventListener("load", finish, { once: true });
+    img.addEventListener("error", finish, { once: true });
+    setTimeout(finish, 3000);
+  })));
 }
 
 function average(values){
