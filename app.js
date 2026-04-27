@@ -1680,14 +1680,21 @@ async function exportPdf(){
   }
 
   const fileName = `${safeName(state.owner || "Blue-Lily-CMA")}.pdf`;
-  const exportRoot = buildPdfExportClone(report);
+  const exportButton = document.getElementById("exportPdf");
+  const exportStatus = document.getElementById("exportStatus");
+  const originalButtonText = exportButton ? exportButton.textContent : "";
+  const exportStage = createPdfExportStage();
 
   try{
-    document.body.appendChild(exportRoot);
-    await waitForImages(exportRoot);
+    if(exportButton){
+      exportButton.disabled = true;
+      exportButton.textContent = "Preparing PDF...";
+    }
+    if(exportStatus) exportStatus.textContent = "Preparing mobile-safe PDF export...";
+
+    document.body.appendChild(exportStage);
     await nextPaint();
 
-    const exportPages = [...exportRoot.querySelectorAll(".pdf-page")];
     const pdf = new JsPDF({
       unit: "px",
       format: [768, 1024],
@@ -1696,21 +1703,17 @@ async function exportPdf(){
       hotfixes: ["px_scaling"]
     });
 
-    for(let index = 0; index < exportPages.length; index += 1){
-      const page = exportPages[index];
-      const canvas = await html2canvasFn(page, {
-        backgroundColor: "#ffffff",
-        scale: 2,
-        useCORS: true,
-        allowTaint: false,
-        logging: false,
-        width: 768,
-        height: 1024,
-        windowWidth: 768,
-        windowHeight: 1024,
-        scrollX: 0,
-        scrollY: 0
-      });
+    for(let index = 0; index < pages.length; index += 1){
+      if(exportButton) exportButton.textContent = `Exporting ${index + 1}/${pages.length}`;
+      if(exportStatus) exportStatus.textContent = `Exporting PDF page ${index + 1} of ${pages.length}...`;
+
+      const pageClone = pages[index].cloneNode(true);
+      preparePageForExport(pageClone);
+      exportStage.replaceChildren(pageClone);
+      await waitForImages(exportStage);
+      await nextPaint();
+
+      const canvas = await renderExportPageToCanvas(html2canvasFn, pageClone);
 
       if(index > 0){
         pdf.addPage([768, 1024], "portrait");
@@ -1718,16 +1721,26 @@ async function exportPdf(){
 
       pdf.setFillColor(255, 255, 255);
       pdf.rect(0, 0, 768, 1024, "F");
-      pdf.addImage(canvas.toDataURL("image/jpeg", 0.98), "JPEG", 0, 0, 768, 1024, undefined, "FAST");
+      pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, 768, 1024, undefined, "FAST");
+
+      canvas.width = 1;
+      canvas.height = 1;
+      await nextPaint();
     }
 
+    if(exportStatus) exportStatus.textContent = "PDF ready. It should contain one page per CMA sheet, with no black pages.";
     pdf.save(fileName);
   }catch(error){
     console.error("PDF export failed:", error);
+    if(exportStatus) exportStatus.textContent = "Direct export failed. Use Print / Save PDF as the fallback.";
     alert("The direct PDF export failed. The app will open Print / Save PDF instead.");
     window.print();
   }finally{
-    exportRoot.remove();
+    exportStage.remove();
+    if(exportButton){
+      exportButton.disabled = false;
+      exportButton.textContent = originalButtonText || "Export PDF";
+    }
   }
 }
 
@@ -1747,46 +1760,117 @@ function nextPaint(){
   return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 }
 
-function buildPdfExportClone(report){
-  const clone = report.cloneNode(true);
-  clone.id = "pdfReportExport";
-  clone.setAttribute("aria-hidden", "true");
-  clone.style.cssText = [
-    "position:absolute",
-    "left:-10000px",
+function createPdfExportStage(){
+  const stage = document.createElement("div");
+  stage.id = "pdfExportStage";
+  stage.setAttribute("aria-hidden", "true");
+  stage.style.cssText = [
+    "position:fixed",
+    "left:0",
     "top:0",
     "width:768px",
+    "height:1024px",
     "margin:0",
     "padding:0",
-    "display:block",
-    "gap:0",
-    "align-items:stretch",
     "background:#ffffff",
-    "z-index:-1",
-    "overflow:visible"
+    "z-index:2147483647",
+    "overflow:hidden",
+    "pointer-events:none"
   ].join(";");
+  return stage;
+}
 
-  clone.querySelectorAll(".pdf-page").forEach(page => {
-    page.style.width = "768px";
-    page.style.height = "1024px";
-    page.style.minWidth = "768px";
-    page.style.minHeight = "1024px";
-    page.style.maxWidth = "768px";
-    page.style.maxHeight = "1024px";
-    page.style.margin = "0";
-    page.style.padding = "0";
-    page.style.display = "block";
-    page.style.position = "relative";
-    page.style.overflow = "hidden";
-    page.style.transform = "none";
-    page.style.transformOrigin = "top left";
-    page.style.boxShadow = "none";
-    page.style.background = "#ffffff";
-    page.style.pageBreakAfter = "auto";
-    page.style.breakAfter = "auto";
-  });
+function preparePageForExport(page){
+  page.style.width = "768px";
+  page.style.height = "1024px";
+  page.style.minWidth = "768px";
+  page.style.minHeight = "1024px";
+  page.style.maxWidth = "768px";
+  page.style.maxHeight = "1024px";
+  page.style.margin = "0";
+  page.style.padding = "0";
+  page.style.display = "block";
+  page.style.position = "relative";
+  page.style.overflow = "hidden";
+  page.style.transform = "none";
+  page.style.transformOrigin = "top left";
+  page.style.boxShadow = "none";
+  page.style.background = "#ffffff";
+  page.style.pageBreakAfter = "auto";
+  page.style.breakAfter = "auto";
+}
 
-  return clone;
+async function renderExportPageToCanvas(html2canvasFn, page){
+  const attempts = getCanvasExportScales().map(scale => ({ scale }));
+  let lastError = null;
+
+  for(const attempt of attempts){
+    try{
+      const canvas = await html2canvasFn(page, {
+        backgroundColor: "#ffffff",
+        scale: attempt.scale,
+        useCORS: true,
+        allowTaint: false,
+        logging: false,
+        width: 768,
+        height: 1024,
+        windowWidth: 768,
+        windowHeight: 1024,
+        scrollX: 0,
+        scrollY: 0,
+        x: 0,
+        y: 0,
+        imageTimeout: 8000,
+        removeContainer: true
+      });
+
+      if(canvasLooksBlack(canvas)){
+        canvas.width = 1;
+        canvas.height = 1;
+        throw new Error("Canvas rendered as a black page. Retrying at a safer scale.");
+      }
+
+      return canvas;
+    }catch(error){
+      lastError = error;
+      await nextPaint();
+    }
+  }
+
+  throw lastError || new Error("Could not render PDF page.");
+}
+
+function getCanvasExportScales(){
+  const ua = navigator.userAgent || "";
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(ua) || Math.min(window.innerWidth || 0, window.innerHeight || 0) < 820;
+  return isMobile ? [1, 0.85] : [1.5, 1];
+}
+
+function canvasLooksBlack(canvas){
+  try{
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    if(!context) return false;
+
+    const width = canvas.width;
+    const height = canvas.height;
+    const sampleSize = 10;
+    let blackSamples = 0;
+    let checkedSamples = 0;
+
+    for(let y = 0; y < height; y += Math.max(1, Math.floor(height / sampleSize))){
+      for(let x = 0; x < width; x += Math.max(1, Math.floor(width / sampleSize))){
+        const pixel = context.getImageData(x, y, 1, 1).data;
+        const alpha = pixel[3];
+        const brightness = pixel[0] + pixel[1] + pixel[2];
+        checkedSamples += 1;
+        if(alpha > 240 && brightness < 35) blackSamples += 1;
+      }
+    }
+
+    return checkedSamples > 0 && blackSamples / checkedSamples > 0.82;
+  }catch(error){
+    return false;
+  }
 }
 
 function waitForImages(root){
@@ -1801,7 +1885,7 @@ function waitForImages(root){
     const finish = () => resolve();
     img.addEventListener("load", finish, { once: true });
     img.addEventListener("error", finish, { once: true });
-    setTimeout(finish, 3000);
+    setTimeout(finish, 8000);
   })));
 }
 
