@@ -162,3 +162,8 @@ Notes:
 - Rebuilt TVA/freehold address import so the report title line is not reused as the street.
 - Added final address sanitising after PDF import to remove duplicate address parts such as "64 Mark Street, 64 Mark Street".
 - Prevented file upload controls from appearing inside the PDF preview/export area.
+
+## v25 rollback/export fix
+- Rolled back the v24 live spacing/export-mode CSS changes.
+- The app preview/layout stays as it was in v23.
+- PDF export now renders each designed page from an offscreen clone, so exported pages do not push footer content onto extra blank pages.
