@@ -1666,65 +1666,56 @@ async function exportPdf(){
   applyDynamicFitting();
 
   const pages = Array.from(document.querySelectorAll("#pdfReport .pdf-page"));
-  const fileName = `${safeName(state.owner || "Blue-Lily-CMA")}.pdf`;
+  const jsPDFClass = window.jspdf && window.jspdf.jsPDF ? window.jspdf.jsPDF : window.jsPDF;
 
-  // v25: export pages one-by-one from an offscreen clone.
-  // This keeps the live app/preview spacing untouched and avoids blank overflow pages.
-  const jsPDFCtor = window.jspdf && window.jspdf.jsPDF;
-  if(!window.html2canvas || !jsPDFCtor || !pages.length){
-    if(typeof html2pdf !== "undefined"){
-      return html2pdf().set({
-        margin: 0,
-        filename: fileName,
-        image: { type: "jpeg", quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff", scrollX: 0, scrollY: 0 },
-        jsPDF: { unit: "px", format: [768, 1024], orientation: "portrait", compress: true },
-        pagebreak: { mode: ["css", "legacy"], after: ".pdf-page" }
-      }).from(document.getElementById("pdfReport")).save();
-    }
+  if(!pages.length || typeof html2canvas === "undefined" || !jsPDFClass){
     window.print();
     return;
   }
 
-  const pdf = new jsPDFCtor({ unit: "px", format: [768, 1024], orientation: "portrait", compress: true });
-  const holder = document.createElement("div");
-  holder.setAttribute("aria-hidden", "true");
-  Object.assign(holder.style, {
-    position: "fixed",
-    left: "-100000px",
-    top: "0",
-    width: "768px",
-    height: "1024px",
-    overflow: "hidden",
-    background: "#ffffff",
-    zIndex: "-1"
+  const fileName = `${safeName(state.owner || "Blue-Lily-CMA")}.pdf`;
+  const pdf = new jsPDFClass({
+    unit: "px",
+    format: [768, 1024],
+    orientation: "portrait",
+    compress: true
   });
-  document.body.appendChild(holder);
+
+  const exportHost = document.createElement("div");
+  exportHost.setAttribute("aria-hidden", "true");
+  exportHost.style.position = "fixed";
+  exportHost.style.left = "-10000px";
+  exportHost.style.top = "0";
+  exportHost.style.width = "768px";
+  exportHost.style.height = "1024px";
+  exportHost.style.overflow = "hidden";
+  exportHost.style.background = "#ffffff";
+  exportHost.style.zIndex = "-1";
+  document.body.appendChild(exportHost);
 
   try{
-    for(const [index, page] of pages.entries()){
-      holder.innerHTML = "";
-      const clone = page.cloneNode(true);
-      Object.assign(clone.style, {
-        width: "768px",
-        height: "1024px",
-        minWidth: "768px",
-        minHeight: "1024px",
-        maxWidth: "768px",
-        maxHeight: "1024px",
-        margin: "0",
-        padding: "0",
-        boxShadow: "none",
-        transform: "none",
-        overflow: "hidden",
-        pageBreakAfter: "auto",
-        breakAfter: "auto"
-      });
-      holder.appendChild(clone);
+    for(let i = 0; i < pages.length; i += 1){
+      const clone = pages[i].cloneNode(true);
+      clone.style.width = "768px";
+      clone.style.height = "1024px";
+      clone.style.margin = "0";
+      clone.style.padding = "0";
+      clone.style.position = "relative";
+      clone.style.overflow = "hidden";
+      clone.style.boxShadow = "none";
+      clone.style.transform = "none";
+      clone.style.pageBreakAfter = "auto";
+      clone.style.breakAfter = "auto";
+      clone.style.background = "#ffffff";
+
+      exportHost.replaceChildren(clone);
+      await waitForImages(clone);
       await new Promise(resolve => requestAnimationFrame(resolve));
+
       const canvas = await html2canvas(clone, {
         scale: 2,
         useCORS: true,
+        allowTaint: true,
         backgroundColor: "#ffffff",
         width: 768,
         height: 1024,
@@ -1733,14 +1724,27 @@ async function exportPdf(){
         scrollX: 0,
         scrollY: 0
       });
-      const image = canvas.toDataURL("image/jpeg", 0.98);
-      if(index > 0) pdf.addPage([768, 1024], "portrait");
-      pdf.addImage(image, "JPEG", 0, 0, 768, 1024);
+
+      const imgData = canvas.toDataURL("image/jpeg", 0.98);
+      if(i > 0) pdf.addPage([768, 1024], "portrait");
+      pdf.addImage(imgData, "JPEG", 0, 0, 768, 1024);
     }
     pdf.save(fileName);
   }finally{
-    holder.remove();
+    exportHost.remove();
   }
+}
+
+function waitForImages(root){
+  const images = Array.from(root.querySelectorAll("img"));
+  if(!images.length) return Promise.resolve();
+  return Promise.all(images.map(img => {
+    if(img.complete) return Promise.resolve();
+    return new Promise(resolve => {
+      img.onload = resolve;
+      img.onerror = resolve;
+    });
+  }));
 }
 
 function average(values){
