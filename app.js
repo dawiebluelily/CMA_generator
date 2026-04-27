@@ -1666,19 +1666,74 @@ async function exportPdf(){
   applyDynamicFitting();
 
   const report = document.getElementById("pdfReport");
-  if(typeof html2pdf === "undefined"){
+  if(!report || typeof html2pdf === "undefined"){
     window.print();
     return;
   }
+
+  const pages = [...report.querySelectorAll(".pdf-page")];
+  if(!pages.length){
+    window.print();
+    return;
+  }
+
+  // Export from a clean, zero-gap clone so each 768 x 1024 sheet becomes exactly one PDF page.
+  // This avoids html2pdf adding a blank page after every template sheet because of preview gaps / CSS page breaks.
+  const exportRoot = document.createElement("div");
+  exportRoot.id = "pdfReportExport";
+  exportRoot.setAttribute("aria-hidden", "true");
+  exportRoot.style.position = "absolute";
+  exportRoot.style.left = "0";
+  exportRoot.style.top = "0";
+  exportRoot.style.width = "768px";
+  exportRoot.style.margin = "0";
+  exportRoot.style.padding = "0";
+  exportRoot.style.background = "#ffffff";
+  exportRoot.style.display = "block";
+  exportRoot.style.zIndex = "-1";
+  exportRoot.style.pointerEvents = "none";
+
+  pages.forEach(page => {
+    const clone = page.cloneNode(true);
+    clone.style.width = "768px";
+    clone.style.height = "1024px";
+    clone.style.margin = "0";
+    clone.style.padding = "0";
+    clone.style.boxShadow = "none";
+    clone.style.transform = "none";
+    clone.style.pageBreakAfter = "auto";
+    clone.style.breakAfter = "auto";
+    clone.style.overflow = "hidden";
+    exportRoot.appendChild(clone);
+  });
+
+  document.body.appendChild(exportRoot);
+
   const fileName = `${safeName(state.owner || "Blue-Lily-CMA")}.pdf`;
-  html2pdf().set({
-    margin: 0,
-    filename: fileName,
-    image: { type: "jpeg", quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff", scrollX: 0, scrollY: 0 },
-    jsPDF: { unit: "px", format: [768, 1024], orientation: "portrait", compress: true },
-    pagebreak: { mode: ["css", "legacy"], after: ".pdf-page" }
-  }).from(report).save();
+  try{
+    const worker = html2pdf().set({
+      margin: 0,
+      filename: fileName,
+      image: { type: "jpeg", quality: 0.98 },
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: 768,
+        windowHeight: 1024
+      },
+      jsPDF: { unit: "px", format: [768, 1024], orientation: "portrait", compress: true },
+      pagebreak: { mode: [] }
+    }).from(exportRoot).save();
+
+    if(worker && typeof worker.then === "function"){
+      await worker;
+    }
+  }finally{
+    exportRoot.remove();
+  }
 }
 
 function average(values){
