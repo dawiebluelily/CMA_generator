@@ -737,13 +737,15 @@ async function buildPdfBytes() {
   }
 
   function drawOwnershipAndAge(page, y) {
+    const ownershipData = data.ownership || {};
+    const ageData = data.ageOwners || data.ownerAges || {};
     const ownership = [
-      ["< 5 years", data.ownership.ownLess5], ["5 - 7 years", data.ownership.own5],
-      ["8 - 10 years", data.ownership.own8], ["11+ years", data.ownership.own11]
+      ["< 5 years", ownershipData.ownLess5], ["5 - 7 years", ownershipData.own5],
+      ["8 - 10 years", ownershipData.own8], ["11+ years", ownershipData.own11]
     ];
     const ages = [
-      ["18 - 35", data.ownerAges.age18], ["35 - 49", data.ownerAges.age35],
-      ["50 - 64", data.ownerAges.age50], ["65+", data.ownerAges.age65]
+      ["18 - 35", ageData.age18], ["35 - 49", ageData.age35],
+      ["50 - 64", ageData.age50], ["65+", ageData.age65]
     ];
     const gap = 12;
     const blockW = (contentW - gap) / 2;
