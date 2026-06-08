@@ -594,195 +594,279 @@ async function buildPdfBytes() {
   const muted = rgb(0.39, 0.42, 0.48);
   const line = rgb(0.86, 0.88, 0.91);
   const paper = rgb(0.98, 0.97, 0.94);
-  let page, width, height, y;
-  const margin = 44;
-  const footerH = 62;
-  const headerH = 92;
+  const white = rgb(1, 1, 1);
 
-  function addPage() {
-    page = pdfDoc.addPage(pageSize);
-    ({ width, height } = page.getSize());
-    drawLetterhead();
-    y = height - headerH - 28;
+  const margin = 38;
+  const footerH = 50;
+  const headerH = 82;
+  const bottomY = footerH + 18;
+  const contentTop = pageSize[1] - headerH - 22;
+  const contentW = pageSize[0] - margin * 2;
+
+  function fitTextSize(value, fontToUse, startSize, minSize, maxWidth) {
+    let size = startSize;
+    const v = safeText(value || "");
+    while (size > minSize && fontToUse.widthOfTextAtSize(v, size) > maxWidth) size -= 0.5;
+    return size;
   }
-  function drawLetterhead() {
+
+  function addFixedPage() {
+    const page = pdfDoc.addPage(pageSize);
+    drawLetterhead(page);
+    return page;
+  }
+
+  function drawLetterhead(page) {
+    const { width, height } = page.getSize();
     page.drawRectangle({ x: 0, y: height - headerH, width, height: headerH, color: navy });
-    page.drawRectangle({ x: 0, y: height - headerH - 5, width, height: 5, color: gold });
-    page.drawRectangle({ x: 0, y: height - headerH - 7, width, height: 2, color: blue });
-    const logoW = 190;
+    page.drawRectangle({ x: 0, y: height - headerH - 4, width, height: 4, color: gold });
+    page.drawRectangle({ x: 0, y: height - headerH - 6, width, height: 2, color: blue });
+
+    const logoW = 176;
     const logoH = logoW * (logo.height / logo.width);
-    page.drawRectangle({ x: margin, y: height - 74, width: logoW + 18, height: logoH + 16, color: rgb(1, 1, 1), borderColor: line, borderWidth: 0.4 });
-    page.drawImage(logo, { x: margin + 9, y: height - 66, width: logoW, height: logoH });
-    page.drawText("COMPLEX REPORT", { x: width - margin - 160, y: height - 44, size: 10, font: bold, color: gold, characterSpacing: 0.9 });
-    page.drawText("Blue Lily Properties", { x: width - margin - 160, y: height - 62, size: 15, font: serifBold, color: rgb(1, 1, 1) });
+    page.drawRectangle({ x: margin, y: height - 66, width: logoW + 16, height: logoH + 14, color: white, borderColor: line, borderWidth: 0.35 });
+    page.drawImage(logo, { x: margin + 8, y: height - 58, width: logoW, height: logoH });
+
+    page.drawText("BLUE LILY COMPLEX REPORT", { x: width - margin - 192, y: height - 38, size: 9.8, font: bold, color: gold, characterSpacing: 0.65 });
+    page.drawText("Two-page summary", { x: width - margin - 192, y: height - 56, size: 8.5, font, color: white });
 
     page.drawRectangle({ x: 0, y: 0, width, height: footerH, color: navy });
-    page.drawLine({ start: { x: margin, y: footerH - 14 }, end: { x: width - margin, y: footerH - 14 }, thickness: 0.8, color: gold });
-    page.drawText("087 265 4784", { x: margin, y: 34, size: 8, font, color: rgb(1,1,1) });
-    page.drawText("www.bluelilysa.co.za", { x: margin + 130, y: 34, size: 8, font, color: rgb(1,1,1) });
-    page.drawText("info@bluelilysa.co.za", { x: margin + 285, y: 34, size: 8, font, color: rgb(1,1,1) });
-    page.drawText("The Workspace, Hazelwood, Pretoria", { x: margin + 415, y: 34, size: 7, font, color: rgb(1,1,1) });
+    page.drawLine({ start: { x: margin, y: footerH - 12 }, end: { x: width - margin, y: footerH - 12 }, thickness: 0.7, color: gold });
+    page.drawText("087 265 4784", { x: margin, y: 27, size: 7.4, font, color: white });
+    page.drawText("www.bluelilysa.co.za", { x: margin + 118, y: 27, size: 7.4, font, color: white });
+    page.drawText("info@bluelilysa.co.za", { x: margin + 270, y: 27, size: 7.4, font, color: white });
+    page.drawText("The Workspace, Hazelwood, Pretoria", { x: margin + 405, y: 27, size: 6.4, font, color: white });
   }
-  function ensureSpace(required) {
-    if (y - required < footerH + 30) addPage();
+
+  function drawSectionTitle(page, title, y, size = 8.2) {
+    page.drawText(safeText(title).toUpperCase(), { x: margin, y, size, font: bold, color: gold, characterSpacing: 0.65 });
+    page.drawLine({ start: { x: margin, y: y - 8 }, end: { x: pageSize[0] - margin, y: y - 8 }, thickness: 0.65, color: gold });
+    return y - 22;
   }
-  function sectionTitle(title) {
-    ensureSpace(34);
-    page.drawText(title.toUpperCase(), { x: margin, y, size: 8.8, font: bold, color: gold, characterSpacing: 0.7 });
-    y -= 9;
-    page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 0.75, color: gold });
-    y -= 18;
-  }
-  function preparedByBlock() {
-    const h = 58;
-    page.drawRectangle({ x: margin, y: y - h, width: width - margin * 2, height: h, color: goldSoft, borderColor: line, borderWidth: 0.5 });
-    page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 1.2, color: gold });
-    page.drawText("PREPARED BY", { x: margin + 14, y: y - 16, size: 7.6, font: bold, color: gold, characterSpacing: 0.7 });
-    page.drawText(safeText(data.agent.name || "Blue Lily Properties"), { x: margin + 14, y: y - 37, size: 14, font: serifBold, color: navy });
+
+  function preparedByBlock(page, y) {
+    const h = 50;
+    page.drawRectangle({ x: margin, y: y - h, width: contentW, height: h, color: goldSoft, borderColor: line, borderWidth: 0.45 });
+    page.drawLine({ start: { x: margin, y }, end: { x: margin + contentW, y }, thickness: 1.1, color: gold });
+    page.drawText("PREPARED BY", { x: margin + 12, y: y - 14, size: 7.1, font: bold, color: gold, characterSpacing: 0.65 });
+    const agentSize = fitTextSize(data.agent.name || "Blue Lily Properties", serifBold, 13, 8, 230);
+    page.drawText(safeText(data.agent.name || "Blue Lily Properties"), { x: margin + 12, y: y - 34, size: agentSize, font: serifBold, color: navy });
+
     const right1 = [data.agent.cell, data.agent.email].filter(Boolean).join("   |   ");
     const right2 = data.agent.ffc ? `PPRA FFC: ${safeText(data.agent.ffc)}` : "";
-    const rightWidth = Math.max(font.widthOfTextAtSize(right1, 8), bold.widthOfTextAtSize(right2, 8));
-    const rx = width - margin - rightWidth - 14;
-    if (right1) page.drawText(safeText(right1), { x: rx, y: y - 22, size: 8, font, color: text });
-    if (right2) page.drawText(right2, { x: rx, y: y - 39, size: 8, font: bold, color: navy2 });
-    y -= h + 26;
+    const rightWidth = Math.max(font.widthOfTextAtSize(right1, 7.5), bold.widthOfTextAtSize(right2, 7.5));
+    const rx = pageSize[0] - margin - Math.min(260, rightWidth) - 12;
+    if (right1) page.drawText(safeText(right1), { x: rx, y: y - 20, size: 7.5, font, color: text });
+    if (right2) page.drawText(right2, { x: rx, y: y - 36, size: 7.5, font: bold, color: navy2 });
+    return y - h - 18;
   }
-  function drawKeyValue(label, value, x, yy, w, h = 42) {
-    page.drawRectangle({ x, y: yy - h, width: w, height: h, color: paper, borderColor: line, borderWidth: 0.45 });
-    page.drawText(label.toUpperCase(), { x: x + 10, y: yy - 13, size: 6.8, font: bold, color: gold });
-    const lines = wrapByWidth(value || "-", bold, 8.6, w - 20).slice(0, 2);
-    page.drawText(lines[0] || "-", { x: x + 10, y: yy - 28, size: 8.6, font: bold, color: text });
-    if (lines[1]) page.drawText(lines[1], { x: x + 10, y: yy - 39, size: 7.7, font, color: text });
+
+  function drawKeyValue(page, label, value, x, yy, w, h = 36) {
+    page.drawRectangle({ x, y: yy - h, width: w, height: h, color: paper, borderColor: line, borderWidth: 0.4 });
+    page.drawText(label.toUpperCase(), { x: x + 8, y: yy - 11, size: 6.2, font: bold, color: gold });
+    const valueLines = wrapByWidth(value || "-", bold, 7.8, w - 16).slice(0, h > 40 ? 2 : 1);
+    page.drawText(valueLines[0] || "-", { x: x + 8, y: yy - 25, size: 7.8, font: bold, color: text });
+    if (valueLines[1]) page.drawText(valueLines[1], { x: x + 8, y: yy - 36, size: 7.1, font, color: text });
   }
-  function detailGrid() {
-    sectionTitle("Property Details");
-    const gap = 10;
-    const colW = (width - margin * 2 - gap) / 2;
-    let yy = y;
-    drawKeyValue("Complex / Scheme", data.report.schemeName, margin, yy, colW);
-    drawKeyValue("Suburb / Town", data.report.suburb, margin + colW + gap, yy, colW);
-    yy -= 48;
-    drawKeyValue("Street Address", data.report.streetAddress, margin, yy, colW, 50);
-    drawKeyValue("Municipality", data.report.municipality, margin + colW + gap, yy, colW, 50);
-    yy -= 56;
-    drawKeyValue("Scheme Number", data.report.schemeNumber, margin, yy, colW);
-    drawKeyValue("Number of Units", data.report.numberUnits, margin + colW + gap, yy, colW);
-    yy -= 48;
-    drawKeyValue("Age of Scheme", data.report.schemeAge, margin, yy, colW);
-    y = yy - 58;
-  }
-  function transferTable() {
-    const rows = data.transferRows || [];
-    if (!rows.length) return;
-    sectionTitle("Transfer Information");
-    const tableW = width - margin * 2;
-    const cols = [
-      { label: "Unit", x: margin, w: 45, key: "unit" },
-      { label: "Size", x: margin + 48, w: 56, key: "size" },
-      { label: "Registration Date", x: margin + 110, w: 105, key: "regDate" },
-      { label: "Purchase Date", x: margin + 220, w: 105, key: "purchaseDate" },
-      { label: "Purchase Price", x: margin + 330, w: 125, key: "purchasePrice" }
-    ];
-    function header(continued = false) {
-      ensureSpace(50);
-      if (continued) { page.drawText("Transfer Information Continued", { x: margin, y, size: 8.5, font: bold, color: gold }); y -= 15; }
-      page.drawRectangle({ x: margin, y: y - 18, width: tableW, height: 24, color: navy2 });
-      cols.forEach(c => page.drawText(c.label, { x: c.x + 5, y: y - 10, size: 7, font: bold, color: rgb(1,1,1) }));
-      y -= 26;
-    }
-    header(false);
-    rows.forEach((row, i) => {
-      if (y - 20 < footerH + 28) { addPage(); header(true); }
-      if (i % 2 === 0) page.drawRectangle({ x: margin, y: y - 13, width: tableW, height: 20, color: paper });
-      cols.forEach(c => {
-        const value = c.key === "size" && row[c.key] && row[c.key] !== "-" ? `${row[c.key]} m²` : (row[c.key] || "-");
-        page.drawText(safeText(String(value)).slice(0, 34), { x: c.x + 5, y: y - 6, size: 8, font, color: text });
-      });
-      y -= 20;
-    });
-    y -= 24;
-  }
-  function drawOwnership() {
-    sectionTitle("Period of Ownership");
-    const items = [
-      ["Less than 5 years", data.ownership.ownLess5], ["5 - 7 years", data.ownership.own5],
-      ["8 - 10 years", data.ownership.own8], ["11 years and more", data.ownership.own11]
-    ];
+
+  function drawPropertyDetails(page, y) {
+    y = drawSectionTitle(page, "Property Details", y);
     const gap = 8;
-    const cardW = (width - margin * 2 - gap * 3) / 4;
-    items.forEach(([label, value], i) => {
-      const x = margin + i * (cardW + gap);
-      page.drawRectangle({ x, y: y - 50, width: cardW, height: 54, color: goldSoft, borderColor: line, borderWidth: 0.45 });
-      page.drawText(label, { x: x + 8, y: y - 13, size: 6.8, font: bold, color: navy2 });
-      page.drawText(String(value || "0"), { x: x + 8, y: y - 39, size: 20, font: serifBold, color: gold });
-    });
-    y -= 78;
+    const colW = (contentW - gap) / 2;
+    drawKeyValue(page, "Complex / Scheme", data.report.schemeName, margin, y, colW);
+    drawKeyValue(page, "Suburb / Town", data.report.suburb, margin + colW + gap, y, colW);
+    y -= 42;
+    drawKeyValue(page, "Street Address", data.report.streetAddress, margin, y, colW, 42);
+    drawKeyValue(page, "Municipality", data.report.municipality, margin + colW + gap, y, colW, 42);
+    y -= 48;
+    const thirdW = (contentW - gap * 2) / 3;
+    drawKeyValue(page, "Scheme Number", data.report.schemeNumber, margin, y, thirdW);
+    drawKeyValue(page, "Number of Units", data.report.numberUnits, margin + thirdW + gap, y, thirdW);
+    drawKeyValue(page, "Age of Scheme", data.report.schemeAge, margin + thirdW * 2 + gap * 2, y, thirdW);
+    return y - 52;
   }
-  function drawSimpleBarChart(title, items, x, yy, w, h) {
-    page.drawRectangle({ x, y: yy - h, width: w, height: h, color: rgb(1,1,1), borderColor: line, borderWidth: 0.45 });
-    page.drawText(title, { x: x + 12, y: yy - 18, size: 9, font: bold, color: navy });
+
+  function tableMetrics(startY1, page2Reserve) {
+    const rows = data.transferRows || [];
+    const available1 = Math.max(0, startY1 - bottomY);
+    const available2 = Math.max(0, contentTop - bottomY - page2Reserve);
+    const headerEach = 22;
+    const totalRows = Math.max(1, rows.length);
+    const rowH = Math.max(5.8, Math.min(17, (available1 + available2 - headerEach * 2) / totalRows));
+    const rowSize = rowH <= 6.3 ? 4.7 : rowH <= 7.5 ? 5.3 : rowH <= 9.5 ? 6.1 : 7.1;
+    const rowsPage1 = Math.max(0, Math.min(rows.length, Math.floor((available1 - headerEach) / rowH)));
+    return { rowH, rowSize, rowsPage1, available1, available2 };
+  }
+
+  function drawTransferHeader(page, y, continued = false) {
+    if (continued) {
+      page.drawText("Transfer Information Continued", { x: margin, y, size: 7.7, font: bold, color: gold });
+      y -= 13;
+    } else {
+      y = drawSectionTitle(page, "Transfer Information", y, 8.1);
+    }
+    const cols = getTransferCols();
+    page.drawRectangle({ x: margin, y: y - 17, width: contentW, height: 22, color: navy2 });
+    cols.forEach(c => page.drawText(c.label, { x: c.x + 4, y: y - 9, size: 6.3, font: bold, color: white }));
+    return y - 22;
+  }
+
+  function getTransferCols() {
+    return [
+      { label: "Unit", x: margin, w: 36, key: "unit" },
+      { label: "Size", x: margin + 39, w: 44, key: "size" },
+      { label: "Registration Date", x: margin + 88, w: 92, key: "regDate" },
+      { label: "Purchase Date", x: margin + 184, w: 92, key: "purchaseDate" },
+      { label: "Purchase Price", x: margin + 282, w: 116, key: "purchasePrice" }
+    ];
+  }
+
+  function drawTransferRows(page, rows, startIndex, endIndex, y, rowH, rowSize) {
+    const cols = getTransferCols();
+    for (let i = startIndex; i < endIndex; i += 1) {
+      const row = rows[i];
+      if ((i - startIndex) % 2 === 0) page.drawRectangle({ x: margin, y: y - rowH + 2, width: contentW, height: rowH, color: paper });
+      cols.forEach(c => {
+        const rawValue = c.key === "size" && row[c.key] && row[c.key] !== "-" ? `${row[c.key]} m²` : (row[c.key] || "-");
+        const value = safeText(String(rawValue)).slice(0, rowSize < 5.5 ? 18 : 30);
+        page.drawText(value, { x: c.x + 4, y: y - rowH + Math.max(2.1, rowH * 0.33), size: rowSize, font, color: text });
+      });
+      y -= rowH;
+    }
+    return y;
+  }
+
+  function drawOwnershipAndAge(page, y) {
+    const ownership = [
+      ["< 5 years", data.ownership.ownLess5], ["5 - 7 years", data.ownership.own5],
+      ["8 - 10 years", data.ownership.own8], ["11+ years", data.ownership.own11]
+    ];
+    const ages = [
+      ["18 - 35", data.ownerAges.age18], ["35 - 49", data.ownerAges.age35],
+      ["50 - 64", data.ownerAges.age50], ["65+", data.ownerAges.age65]
+    ];
+    const gap = 12;
+    const blockW = (contentW - gap) / 2;
+    function miniStatBlock(title, items, x, yy) {
+      page.drawText(title.toUpperCase(), { x, y: yy, size: 7.4, font: bold, color: gold, characterSpacing: 0.55 });
+      yy -= 14;
+      const cardGap = 5;
+      const cardW = (blockW - cardGap * 3) / 4;
+      items.forEach(([label, value], i) => {
+        const cx = x + i * (cardW + cardGap);
+        page.drawRectangle({ x: cx, y: yy - 43, width: cardW, height: 43, color: goldSoft, borderColor: line, borderWidth: 0.35 });
+        page.drawText(label, { x: cx + 5, y: yy - 11, size: 5.5, font: bold, color: navy2 });
+        page.drawText(String(value || "0"), { x: cx + 5, y: yy - 32, size: 14, font: serifBold, color: gold });
+      });
+    }
+    miniStatBlock("Period of Ownership", ownership, margin, y);
+    miniStatBlock("Age of Owners", ages, margin + blockW + gap, y);
+    return y - 68;
+  }
+
+  function drawSimpleBarChartOnPage(page, title, items, x, yy, w, h) {
+    page.drawRectangle({ x, y: yy - h, width: w, height: h, color: white, borderColor: line, borderWidth: 0.4 });
+    page.drawText(title, { x: x + 10, y: yy - 15, size: 7.6, font: bold, color: navy });
     const max = Math.max(1, ...items.map(item => parseNumber(item.value)));
-    const chartX = x + 16;
-    const chartY = yy - h + 34;
-    const chartH = h - 70;
-    const gap = 10;
-    const barW = (w - 32 - gap * (items.length - 1)) / items.length;
+    const chartX = x + 15;
+    const chartY = yy - h + 28;
+    const chartH = Math.max(30, h - 62);
+    const gap = Math.max(4, items.length > 5 ? 4 : 8);
+    const barW = Math.max(5, (w - 30 - gap * (items.length - 1)) / items.length);
     items.forEach((item, i) => {
       const val = parseNumber(item.value);
       const bh = Math.max(2, chartH * val / max);
       const bx = chartX + i * (barW + gap);
       page.drawRectangle({ x: bx, y: chartY, width: barW, height: bh, color: blue });
-      page.drawText(String(val), { x: bx + 2, y: chartY + bh + 4, size: 6.5, font: bold, color: navy2 });
-      const label = String(item.label).slice(0, 8);
-      page.drawText(label, { x: bx, y: yy - h + 14, size: 6.3, font, color: muted });
+      page.drawText(String(val), { x: bx, y: chartY + bh + 3, size: 5.4, font: bold, color: navy2 });
+      page.drawText(String(item.label).slice(0, 6), { x: bx - 1, y: yy - h + 11, size: 5.1, font, color: muted });
     });
   }
-  async function growthActivity() {
-    sectionTitle("Growth and Activity");
-    const blockW = width - margin * 2;
-    if (data.graphImageDataUrl) {
+
+  async function drawGrowthActivity(page, y) {
+    y = drawSectionTitle(page, "Growth and Activity", y, 8.1);
+    const minBottom = bottomY + 6;
+    const available = Math.max(90, y - minBottom);
+    const yearRows = rowsByYear(data.transferRows || []);
+    const colW = (contentW - 10) / 2;
+
+    if (data.graphImageDataUrl && available > 125) {
       const bytes = dataUrlToBytes(data.graphImageDataUrl);
       const image = data.graphImageDataUrl.includes("image/jpeg") ? await pdfDoc.embedJpg(bytes) : await pdfDoc.embedPng(bytes);
-      const maxH = 210;
-      const scale = Math.min(blockW / image.width, maxH / image.height);
+      const maxH = Math.min(available, 165);
+      const scale = Math.min(contentW / image.width, maxH / image.height);
       const iw = image.width * scale;
       const ih = image.height * scale;
-      ensureSpace(ih + 42);
-      page.drawRectangle({ x: margin, y: y - ih - 12, width: blockW, height: ih + 20, color: rgb(1,1,1), borderColor: line, borderWidth: 0.45 });
-      page.drawImage(image, { x: margin + (blockW - iw) / 2, y: y - ih - 2, width: iw, height: ih });
-      y -= ih + 34;
+      page.drawRectangle({ x: margin, y: y - ih - 8, width: contentW, height: ih + 14, color: white, borderColor: line, borderWidth: 0.4 });
+      page.drawImage(image, { x: margin + (contentW - iw) / 2, y: y - ih - 1, width: iw, height: ih });
+      return y - ih - 18;
     }
-    const yearRows = rowsByYear(data.transferRows || []);
-    ensureSpace(180);
-    const colW = (blockW - 12) / 2;
-    const countItems = yearRows.length ? yearRows.map(r => ({ label: r.year, value: r.count })) : [
+
+    const chartH = Math.min(132, Math.max(90, available));
+    const countItems = yearRows.length ? yearRows.map(r => ({ label: r.year, value: r.count })).slice(-6) : [
       { label: "2020", value: 0 }, { label: "2021", value: 0 }, { label: "2022", value: 0 }
     ];
-    const medianItems = yearRows.length ? yearRows.map(r => ({ label: r.year, value: Math.round(r.median / 1000) })) : [
+    const medianItems = yearRows.length ? yearRows.map(r => ({ label: r.year, value: Math.round(r.median / 1000) })).slice(-6) : [
       { label: "2020", value: 0 }, { label: "2021", value: 0 }, { label: "2022", value: 0 }
     ];
-    drawSimpleBarChart("Registrations from captured transfers", countItems.slice(-6), margin, y, colW, 150);
-    drawSimpleBarChart("Median price from captured transfers (R'000)", medianItems.slice(-6), margin + colW + 12, y, colW, 150);
-    y -= 180;
+    drawSimpleBarChartOnPage(page, "Registrations", countItems, margin, y, colW, chartH);
+    drawSimpleBarChartOnPage(page, "Median Price (R'000)", medianItems, margin + colW + 10, y, colW, chartH);
+    return y - chartH - 12;
   }
 
-  addPage();
-  preparedByBlock();
-  page.drawText(safeText((data.report.title || "Blue Lily Complex Report").toUpperCase()), { x: margin, y, size: 10, font: bold, color: gold, characterSpacing: 0.9 });
-  y -= 28;
-  page.drawText(safeText(data.report.schemeName || "COMPLEX REPORT"), { x: margin, y, size: 30, font: serifBold, color: navy });
-  y -= 28;
+  const page1 = addFixedPage();
+  const page2 = addFixedPage();
+
+  let y1 = contentTop;
+  y1 = preparedByBlock(page1, y1);
+  page1.drawText(safeText((data.report.title || "Blue Lily Complex Report").toUpperCase()), { x: margin, y: y1, size: 10.8, font: bold, color: gold, characterSpacing: 0.85 });
+  y1 -= 26;
+  const scheme = data.report.schemeName || "COMPLEX REPORT";
+  const schemeSize = fitTextSize(scheme, serifBold, 33, 20, contentW);
+  page1.drawText(safeText(scheme), { x: margin, y: y1, size: schemeSize, font: serifBold, color: navy });
+  y1 -= 26;
   const subtitle = [data.report.suburb, data.report.municipality].filter(Boolean).join(" | ");
-  if (subtitle) { page.drawText(safeText(subtitle), { x: margin, y, size: 9.5, font, color: muted }); y -= 26; }
-  detailGrid();
-  transferTable();
-  drawOwnership();
-  await growthActivity();
+  if (subtitle) {
+    page1.drawText(safeText(subtitle), { x: margin, y: y1, size: 9, font, color: muted });
+    y1 -= 20;
+  }
+  y1 = drawPropertyDetails(page1, y1);
+
+  const rows = data.transferRows || [];
+  let y2 = contentTop;
+  const reserveSecondPage = 260;
+  if (rows.length) {
+    const metrics = tableMetrics(y1, reserveSecondPage);
+    let rowH = metrics.rowH;
+    let rowSize = metrics.rowSize;
+    let rowsPage1 = metrics.rowsPage1;
+    const page2Capacity = Math.floor((metrics.available2 - 22) / rowH);
+    if (rows.length - rowsPage1 > page2Capacity) {
+      rowH = Math.max(5.2, (metrics.available1 + metrics.available2 - 44) / rows.length);
+      rowSize = rowH <= 5.8 ? 4.4 : 5.0;
+      rowsPage1 = Math.max(0, Math.min(rows.length, Math.floor((metrics.available1 - 22) / rowH)));
+    }
+
+    let tableY1 = drawTransferHeader(page1, y1, false);
+    tableY1 = drawTransferRows(page1, rows, 0, rowsPage1, tableY1, rowH, rowSize);
+
+    let tableY2 = drawTransferHeader(page2, y2, true);
+    tableY2 = drawTransferRows(page2, rows, rowsPage1, rows.length, tableY2, rowH, rowSize);
+    y2 = Math.min(tableY2 - 12, contentTop - 20);
+  } else {
+    y2 = drawTransferHeader(page2, y2, true);
+    page2.drawText("No transfer information captured.", { x: margin, y: y2 - 8, size: 8, font, color: muted });
+    y2 -= 34;
+  }
+
+  y2 = drawOwnershipAndAge(page2, y2);
+  await drawGrowthActivity(page2, y2);
 
   const pages = pdfDoc.getPages();
   pages.forEach((p, idx) => {
-    p.drawText(`Page ${idx + 1} of ${pages.length}`, { x: width - margin - 58, y: 16, size: 7, font, color: rgb(1,1,1) });
+    p.drawText(`Page ${idx + 1} of 2`, { x: pageSize[0] - margin - 49, y: 15, size: 7, font, color: white });
   });
+
   const outputBytes = await pdfDoc.save();
   const fileSafe = (data.report.schemeName || "Blue Lily Complex Report").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
   return { outputBytes, filename: `${fileSafe}-Blue-Lily-Complex-Report.pdf` };

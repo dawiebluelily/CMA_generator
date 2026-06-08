@@ -88,3 +88,8 @@ The app is wired to this Google Sheet as the default agent roster:
 https://docs.google.com/spreadsheets/d/1OcpmU2rveF1s633NCvCy9BsZN--44lKocjqYSAx5wAY/edit?gid=0#gid=0
 
 The same spreadsheet ID is also set inside `google-apps-script/Code.gs` for private-sheet deployment.
+
+
+## Two-page output
+
+This version forces the generated PDF to stay as a two-page Blue Lily Complex Report. Transfer rows, table font size, row height, and the Growth and Activity section dynamically scale to fit the report into two pages.
