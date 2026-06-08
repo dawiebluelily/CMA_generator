@@ -767,52 +767,76 @@ async function buildPdfBytes() {
   }
 
   function drawSimpleBarChartOnPage(page, title, items, x, yy, w, h) {
-    page.drawRectangle({ x, y: yy - h, width: w, height: h, color: white, borderColor: line, borderWidth: 0.4 });
-    page.drawText(title, { x: x + 10, y: yy - 15, size: 7.6, font: bold, color: navy });
-    const max = Math.max(1, ...items.map(item => parseNumber(item.value)));
-    const chartX = x + 15;
-    const chartY = yy - h + 28;
-    const chartH = Math.max(30, h - 62);
-    const gap = Math.max(4, items.length > 5 ? 4 : 8);
-    const barW = Math.max(5, (w - 30 - gap * (items.length - 1)) / items.length);
+    page.drawRectangle({ x, y: yy - h, width: w, height: h, color: white, borderColor: line, borderWidth: 0.5 });
+    page.drawText(title, { x: x + 12, y: yy - 16, size: 8.4, font: bold, color: navy });
+
+    const values = items.map(item => parseNumber(item.value));
+    const max = Math.max(1, ...values);
+    const chartLeft = x + 18;
+    const chartRight = x + w - 14;
+    const chartBottom = yy - h + 28;
+    const chartTop = yy - 30;
+    const chartH = Math.max(54, chartTop - chartBottom);
+    const chartW = chartRight - chartLeft;
+    const gap = Math.max(5, items.length > 5 ? 5 : 10);
+    const barW = Math.max(10, (chartW - gap * (items.length - 1)) / Math.max(1, items.length));
+
+    for (let g = 0; g < 4; g += 1) {
+      const gy = chartBottom + (chartH * g / 3);
+      page.drawLine({ start: { x: chartLeft, y: gy }, end: { x: chartRight, y: gy }, thickness: 0.35, color: line });
+    }
+    page.drawLine({ start: { x: chartLeft, y: chartBottom }, end: { x: chartRight, y: chartBottom }, thickness: 0.7, color: navy2 });
+
     items.forEach((item, i) => {
       const val = parseNumber(item.value);
-      const bh = Math.max(2, chartH * val / max);
-      const bx = chartX + i * (barW + gap);
-      page.drawRectangle({ x: bx, y: chartY, width: barW, height: bh, color: blue });
-      page.drawText(String(val), { x: bx, y: chartY + bh + 3, size: 5.4, font: bold, color: navy2 });
-      page.drawText(String(item.label).slice(0, 6), { x: bx - 1, y: yy - h + 11, size: 5.1, font, color: muted });
+      const bh = Math.max(4, chartH * val / max);
+      const bx = chartLeft + i * (barW + gap);
+      page.drawRectangle({ x: bx, y: chartBottom, width: barW, height: bh, color: blue });
+      const valText = String(val);
+      const valWidth = bold.widthOfTextAtSize(valText, 6.2);
+      page.drawText(valText, { x: bx + (barW - valWidth) / 2, y: chartBottom + bh + 4, size: 6.2, font: bold, color: navy2 });
+      const lbl = String(item.label).slice(-4);
+      const lblWidth = font.widthOfTextAtSize(lbl, 5.8);
+      page.drawText(lbl, { x: bx + (barW - lblWidth) / 2, y: yy - h + 10, size: 5.8, font, color: muted });
     });
   }
 
   async function drawGrowthActivity(page, y) {
     y = drawSectionTitle(page, "Growth and Activity", y, 8.1);
-    const minBottom = bottomY + 6;
-    const available = Math.max(90, y - minBottom);
+    const minBottom = bottomY + 8;
+    const available = Math.max(130, y - minBottom);
     const yearRows = rowsByYear(data.transferRows || []);
-    const colW = (contentW - 10) / 2;
+    const colW = (contentW - 12) / 2;
 
-    if (data.graphImageDataUrl && available > 125) {
+    const countItems = yearRows.length ? yearRows.map(r => ({ label: r.year, value: r.count })).slice(-8) : [
+      { label: "2020", value: 0 }, { label: "2021", value: 0 }, { label: "2022", value: 0 }
+    ];
+    const medianItems = yearRows.length ? yearRows.map(r => ({ label: r.year, value: Math.round(r.median / 1000) })).slice(-8) : [
+      { label: "2020", value: 0 }, { label: "2021", value: 0 }, { label: "2022", value: 0 }
+    ];
+
+    if (yearRows.length) {
+      const chartH = Math.min(available, 210);
+      drawSimpleBarChartOnPage(page, "Median Price (R'000)", medianItems, margin, y, colW, chartH);
+      drawSimpleBarChartOnPage(page, "Number of Registrations", countItems, margin + colW + 12, y, colW, chartH);
+      return y - chartH - 12;
+    }
+
+    if (data.graphImageDataUrl && available > 150) {
       const bytes = dataUrlToBytes(data.graphImageDataUrl);
       const image = data.graphImageDataUrl.includes("image/jpeg") ? await pdfDoc.embedJpg(bytes) : await pdfDoc.embedPng(bytes);
-      const maxH = Math.min(available, 165);
+      const maxH = Math.min(available, 220);
       const scale = Math.min(contentW / image.width, maxH / image.height);
       const iw = image.width * scale;
       const ih = image.height * scale;
-      page.drawRectangle({ x: margin, y: y - ih - 8, width: contentW, height: ih + 14, color: white, borderColor: line, borderWidth: 0.4 });
+      page.drawRectangle({ x: margin, y: y - ih - 6, width: contentW, height: ih + 10, color: white, borderColor: line, borderWidth: 0.5 });
       page.drawImage(image, { x: margin + (contentW - iw) / 2, y: y - ih - 1, width: iw, height: ih });
-      return y - ih - 18;
+      return y - ih - 14;
     }
 
-    const chartH = Math.min(132, Math.max(90, available));
-    const countItems = yearRows.length ? yearRows.map(r => ({ label: r.year, value: r.count })).slice(-6) : [
-      { label: "2020", value: 0 }, { label: "2021", value: 0 }, { label: "2022", value: 0 }
-    ];
-    const medianItems = yearRows.length ? yearRows.map(r => ({ label: r.year, value: Math.round(r.median / 1000) })).slice(-6) : [
-      { label: "2020", value: 0 }, { label: "2021", value: 0 }, { label: "2022", value: 0 }
-    ];
-    drawSimpleBarChartOnPage(page, "Registrations", countItems, margin, y, colW, chartH);
-    drawSimpleBarChartOnPage(page, "Median Price (R'000)", medianItems, margin + colW + 10, y, colW, chartH);
+    const chartH = Math.min(available, 210);
+    drawSimpleBarChartOnPage(page, "Median Price (R'000)", medianItems, margin, y, colW, chartH);
+    drawSimpleBarChartOnPage(page, "Number of Registrations", countItems, margin + colW + 12, y, colW, chartH);
     return y - chartH - 12;
   }
 
